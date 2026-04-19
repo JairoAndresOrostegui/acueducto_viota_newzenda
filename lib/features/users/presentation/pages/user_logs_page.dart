@@ -46,9 +46,9 @@ class _UserLogsPageState extends State<UserLogsPage> {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFE0ECE8))),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${toDisplayText(log.accion)} · ${toDisplayText(log.usuarioObjetivoNombre)}', style: Theme.of(context).textTheme.titleLarge),
+                    Text('${toDisplayText(log.accion)} · ${toDisplayUserName(log.usuarioObjetivoNombre)}', style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 6),
-                    Text('Responsable: ${toDisplayText(log.actorNombre)} · ${_formatDate(log.fecha)}', style: Theme.of(context).textTheme.bodyMedium),
+                    Text('Responsable: ${toDisplayUserName(log.actorNombre)} · ${_formatDate(log.fecha)}', style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 12),
                     if (log.anterior != null) _LogBlock(title: 'Anterior', data: log.anterior!),
                     if (log.nuevo != null) ...[const SizedBox(height: 10), _LogBlock(title: 'Nuevo', data: log.nuevo!)],

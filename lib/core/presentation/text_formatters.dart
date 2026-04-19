@@ -17,3 +17,7 @@ String toDisplayText(String value) {
 
   return '${lower[0].toUpperCase()}${lower.substring(1)}';
 }
+
+String toDisplayUserName(String value) {
+  return value.trim().toUpperCase();
+}

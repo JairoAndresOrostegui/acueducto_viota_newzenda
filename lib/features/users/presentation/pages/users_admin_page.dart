@@ -122,7 +122,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar usuario'),
-        content: Text('Se eliminará el perfil de ${toDisplayText(user.nombre)}.'),
+        content: Text('Se eliminará el perfil de ${toDisplayUserName(user.nombre)}.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Eliminar')),
@@ -152,7 +152,7 @@ class UserFormDialog extends StatefulWidget {
 
 class _UserFormDialogState extends State<UserFormDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nombreController = TextEditingController(text: widget.user == null ? '' : toDisplayText(widget.user!.nombre));
+  late final TextEditingController _nombreController = TextEditingController(text: widget.user == null ? '' : toDisplayUserName(widget.user!.nombre));
   late final TextEditingController _numeroDocumentoController = TextEditingController(text: widget.user?.numeroDocumento ?? '');
   late final TextEditingController _numeroContactoController = TextEditingController(text: widget.user?.numeroContacto ?? '');
   late final TextEditingController _codigoUsuarioController = TextEditingController(text: widget.user?.codigoUsuario == 'na' ? '' : widget.user?.codigoUsuario ?? '');
@@ -418,10 +418,10 @@ class _UserCard extends StatelessWidget {
       child: LayoutBuilder(builder: (context, constraints) {
         final compact = constraints.maxWidth < 760;
         final info = Row(children: [
-          CircleAvatar(backgroundColor: AppColors.brandBlueSoft, foregroundColor: AppColors.brandBlueDark, child: Text(toDisplayText(user.nombreCorto).characters.first)),
+          CircleAvatar(backgroundColor: AppColors.brandBlueSoft, foregroundColor: AppColors.brandBlueDark, child: Text(toDisplayUserName(user.nombreCorto).characters.first)),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(toDisplayText(user.nombre), style: Theme.of(context).textTheme.titleLarge),
+            Text(toDisplayUserName(user.nombre), style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 4),
             Text('${toDisplayText(user.rol)} · ${toDisplayText(user.estado)}', style: Theme.of(context).textTheme.bodyMedium),
           ])),

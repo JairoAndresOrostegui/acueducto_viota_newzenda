@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/presentation/text_formatters.dart';
 import '../../../admin/presentation/pages/admin_console_page.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
 import '../../../users/data/user_firestore_service.dart';
@@ -123,7 +124,7 @@ class _ProfileMissingView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bienvenido, $userName',
+                  'Bienvenido, ${toDisplayUserName(userName)}',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 10),
@@ -167,7 +168,7 @@ class _NoAccessView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Acceso restringido para $userName',
+              'Acceso restringido para ${toDisplayUserName(userName)}',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 10),
