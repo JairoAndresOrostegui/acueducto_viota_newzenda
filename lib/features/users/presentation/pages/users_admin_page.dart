@@ -122,7 +122,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar usuario'),
-        content: Text('Se eliminara el perfil de ${toDisplayText(user.nombre)}.'),
+        content: Text('Se eliminará el perfil de ${toDisplayText(user.nombre)}.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Eliminar')),
@@ -194,19 +194,19 @@ class _UserFormDialogState extends State<UserFormDialog> {
                   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(_isEditing ? 'Editar usuario' : 'Nuevo usuario', style: Theme.of(context).textTheme.headlineMedium),
                     const SizedBox(height: 8),
-                    Text('El formulario usa catalogos activos de tipos de documento, roles y sectores.', style: Theme.of(context).textTheme.bodyMedium),
+                    Text('El formulario usa catálogos activos de tipos de documento, roles y sectores.', style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 20),
                     Wrap(spacing: 16, runSpacing: 16, children: [
                       _FieldBox(width: width * 2 + 16, child: _text(_correoController, 'Correo', validator: _emailValidator)),
                       _FieldBox(width: width * 2 + 16, child: _text(_nombreController, 'Nombre completo')),
                       _FieldBox(width: width, child: _selectDoc()),
-                      _FieldBox(width: width, child: _text(_numeroDocumentoController, 'Numero documento')),
-                      _FieldBox(width: width, child: _text(_numeroContactoController, 'Numero contacto')),
+                      _FieldBox(width: width, child: _text(_numeroDocumentoController, 'Número documento')),
+                      _FieldBox(width: width, child: _text(_numeroContactoController, 'Número contacto')),
                       _FieldBox(width: width, child: _selectRole()),
                       _FieldBox(width: width, child: _selectState()),
                       _FieldBox(width: width * 2 + 16, child: _password()),
                       _FieldBox(width: width, child: _text(_codigoUsuarioController, 'Codigo usuario', enabled: _isClient, validator: _isClient ? _required : null)),
-                      _FieldBox(width: width, child: _text(_numeroContadorController, 'Numero contador', enabled: _isClient, validator: _isClient ? _required : null)),
+                      _FieldBox(width: width, child: _text(_numeroContadorController, 'Número contador', enabled: _isClient, validator: _isClient ? _required : null)),
                       _FieldBox(width: width, child: _selectSector()),
                     ]),
                     if (_isClient && widget.sectors.isEmpty) ...[const SizedBox(height: 12), const Text('Debes crear al menos un sector activo para registrar clientes.')],
@@ -320,7 +320,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     final base = _required(value);
     if (base != null) return base;
     final text = value!.trim();
-    if (!text.contains('@') || !text.contains('.')) return 'Correo invalido.';
+      if (!text.contains('@') || !text.contains('.')) return 'Correo inválido.';
     return null;
   }
 

@@ -8,15 +8,12 @@ String toDisplayText(String value) {
     return text.toLowerCase();
   }
 
-  return text
-      .split(RegExp(r'\s+'))
-      .map((word) {
-        if (word.isEmpty) {
-          return word;
-        }
+  final lower = text.toLowerCase();
+  const acronyms = {'cc', 'ce', 'nit', 'ppt', 'pas', 'na'};
 
-        final lower = word.toLowerCase();
-        return '${lower[0].toUpperCase()}${lower.substring(1)}';
-      })
-      .join(' ');
+  if (acronyms.contains(lower)) {
+    return lower.toUpperCase();
+  }
+
+  return '${lower[0].toUpperCase()}${lower.substring(1)}';
 }

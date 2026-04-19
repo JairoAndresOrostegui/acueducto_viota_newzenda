@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../../../core/presentation/text_formatters.dart';
 import '../../../../theme/app_colors.dart';
@@ -68,7 +68,7 @@ class _CatalogAdminPageState extends State<CatalogAdminPage> {
         }).toList();
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Header(
               title: widget.title,
@@ -152,7 +152,7 @@ class _CatalogAdminPageState extends State<CatalogAdminPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Eliminar ${widget.itemName}'),
-        content: Text('Se eliminara ${toDisplayText(item.nombre)}.'),
+        content: Text('Se eliminará ${toDisplayText(item.nombre)}.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -204,47 +204,27 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 720;
-        final info = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 8),
             Text(description, style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: 8),
-            Text('Registros cargados: $totalLabel'),
-          ],
-        );
-
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              info,
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: onCreate,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Nuevo'),
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(child: info),
-            const SizedBox(width: 16),
-            ElevatedButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Nuevo'),
+        const SizedBox(height: 8),
+        Text('Registros cargados: $totalLabel'),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton.icon(
+            onPressed: onCreate,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 48),
             ),
-          ],
-        );
-      },
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Nuevo'),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -355,6 +335,9 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
                       ),
                       ElevatedButton(
                         onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
                         child: const Text('Guardar'),
                       ),
                     ],
@@ -447,11 +430,17 @@ class _CatalogCard extends StatelessWidget {
             children: [
               OutlinedButton.icon(
                 onPressed: onEdit,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                ),
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
               ),
               OutlinedButton.icon(
                 onPressed: onDelete,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                ),
                 icon: const Icon(Icons.delete_outline_rounded),
                 label: const Text('Eliminar'),
               ),
@@ -473,7 +462,10 @@ class _CatalogCard extends StatelessWidget {
             children: [
               Expanded(child: info),
               const SizedBox(width: 12),
-              actions,
+              Align(
+                alignment: Alignment.centerRight,
+                child: actions,
+              ),
             ],
           );
         },
@@ -481,3 +473,4 @@ class _CatalogCard extends StatelessWidget {
     );
   }
 }
+

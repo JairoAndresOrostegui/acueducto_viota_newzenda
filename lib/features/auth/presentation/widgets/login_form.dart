@@ -51,7 +51,7 @@ class _LoginFormState extends State<LoginForm> {
                     return 'Ingresa el correo de acceso.';
                   }
                   if (!text.contains('@') || !text.contains('.')) {
-                    return 'Ingresa un correo valido.';
+                    return 'Ingresa un correo válido.';
                   }
                   return null;
                 },

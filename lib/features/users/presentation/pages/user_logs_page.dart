@@ -25,7 +25,7 @@ class _UserLogsPageState extends State<UserLogsPage> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Logs de usuarios', style: Theme.of(context).textTheme.headlineMedium),
       const SizedBox(height: 8),
-      Text('Consulta auditoria de ediciones y eliminaciones. La busqueda usa la primera palabra escrita y devuelve hasta 50 registros.', style: Theme.of(context).textTheme.bodyLarge),
+      Text('Consulta auditoría de ediciones y eliminaciones. La búsqueda usa la primera palabra escrita y devuelve hasta 50 registros.', style: Theme.of(context).textTheme.bodyLarge),
       const SizedBox(height: 16),
       TextField(controller: _searchController, onChanged: (value) => setState(() => _query = value), decoration: const InputDecoration(labelText: 'Buscar por palabra', prefixIcon: Icon(Icons.search_rounded))),
       const SizedBox(height: 16),

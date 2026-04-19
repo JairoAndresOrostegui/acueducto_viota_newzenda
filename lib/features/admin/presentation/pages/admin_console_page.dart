@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
 
 import '../../../catalogs/data/catalog_firestore_service.dart';
-import '../../../catalogs/presentation/pages/catalog_admin_page.dart';
 import '../../../../theme/app_colors.dart';
 import '../../../users/data/user_admin_functions_service.dart';
 import '../../../users/data/user_audit_log_service.dart';
@@ -78,7 +78,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                 CatalogAdminPage(
                   title: 'Tipos de documento',
                   description:
-                      'Catalogo usado por el formulario de usuarios. Solo se muestran activos fuera de este modulo.',
+                      'Catálogo usado por el formulario de usuarios. Solo se muestran activos fuera de este módulo.',
                   itemName: 'tipo de documento',
                   valueLabel: 'Valor BD',
                   nameLabel: 'Nombre visible',
@@ -87,7 +87,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                 CatalogAdminPage(
                   title: 'Roles',
                   description:
-                      'Catalogo de perfiles permitidos para usuarios administrables.',
+                      'Catálogo de perfiles permitidos para usuarios administrables.',
                   itemName: 'rol',
                   valueLabel: 'Valor BD',
                   nameLabel: 'Nombre visible',

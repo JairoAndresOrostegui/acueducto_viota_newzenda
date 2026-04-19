@@ -128,7 +128,7 @@ class _ProfileMissingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Tu usuario existe en Firebase Authentication, pero aun no tiene perfil en Firestore dentro de la coleccion usuarios.',
+                  'Tu usuario existe en Firebase Authentication, pero aún no tiene perfil en Firestore dentro de la colección usuarios.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
@@ -172,7 +172,7 @@ class _NoAccessView extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Este modulo solo esta disponible para administradores activos. Perfil actual: $role / $estado.',
+              'Este módulo solo está disponible para administradores activos. Perfil actual: $role / $estado.',
               textAlign: TextAlign.center,
             ),
           ],
