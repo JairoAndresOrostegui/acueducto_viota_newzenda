@@ -158,16 +158,13 @@ class FakeDocumentTypeCatalogService extends DocumentTypeCatalogService {
     return [
       CatalogItem(
         id: 'cc',
-        valor: 'CC',
-        nombre: 'Cedula de ciudadania',
+        valor: 'cc',
+        nombre: 'cedula de ciudadania',
         estado: 'activo',
         fechaCreacion: DateTime(2026, 4, 18),
       ),
     ];
   }
-
-  @override
-  Future<void> ensureDefaults(List<CatalogItem> defaults) async {}
 }
 
 class FakeRoleCatalogService extends RoleCatalogService {
@@ -177,22 +174,19 @@ class FakeRoleCatalogService extends RoleCatalogService {
       CatalogItem(
         id: 'administrador',
         valor: 'administrador',
-        nombre: 'Administrador',
+        nombre: 'administrador',
         estado: 'activo',
         fechaCreacion: DateTime(2026, 4, 18),
       ),
       CatalogItem(
         id: 'cliente',
         valor: 'cliente',
-        nombre: 'Cliente',
+        nombre: 'cliente',
         estado: 'activo',
         fechaCreacion: DateTime(2026, 4, 18),
       ),
     ];
   }
-
-  @override
-  Future<void> ensureDefaults(List<CatalogItem> defaults) async {}
 }
 
 class FakeSectorCatalogService extends SectorCatalogService {
@@ -201,8 +195,8 @@ class FakeSectorCatalogService extends SectorCatalogService {
     return [
       CatalogItem(
         id: 'quitasol',
-        valor: 'Quitasol',
-        nombre: 'Quitasol',
+        valor: 'quitasol',
+        nombre: 'quitasol',
         estado: 'activo',
         fechaCreacion: DateTime(2026, 4, 18),
       ),

@@ -35,35 +35,6 @@ class AdminConsolePage extends StatefulWidget {
 }
 
 class _AdminConsolePageState extends State<AdminConsolePage> {
-  late final DocumentTypeCatalogService _documentTypeService =
-      widget.documentTypeService ?? DocumentTypeCatalogService();
-  late final RoleCatalogService _roleService =
-      widget.roleService ?? RoleCatalogService();
-
-  @override
-  void initState() {
-    super.initState();
-    _seedCatalogs();
-  }
-
-  Future<void> _seedCatalogs() async {
-    try {
-      await _documentTypeService.ensureDefaults(
-        DocumentTypeCatalogService.defaultItems(),
-      );
-      await _roleService.ensureDefaults(RoleCatalogService.defaultItems());
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No fue posible inicializar los catalogos base.'),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
