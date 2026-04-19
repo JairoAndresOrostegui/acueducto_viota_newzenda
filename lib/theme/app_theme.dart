@@ -111,6 +111,20 @@ abstract final class AppTheme {
           ),
         ),
       ),
+      tabBarTheme: const TabBarThemeData(
+        labelColor: AppColors.brandBlueDark,
+        unselectedLabelColor: AppColors.textSecondary,
+        indicatorColor: AppColors.brandBlue,
+        dividerColor: Colors.transparent,
+        labelStyle: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
         surfaceTintColor: Colors.transparent,

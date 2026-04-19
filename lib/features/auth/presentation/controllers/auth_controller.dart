@@ -1,24 +1,37 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
-import '../../data/local_auth_service.dart';
+import '../../domain/auth_exception.dart';
+import '../../domain/auth_service.dart';
+import '../../domain/auth_user.dart';
 
 class AuthController extends ChangeNotifier {
-  AuthController({LocalAuthService? authService})
-      : _authService = authService ?? LocalAuthService();
+  AuthController({required AuthService authService}) : _authService = authService {
+    _authSubscription = _authService.authStateChanges().listen(_handleAuthChange);
+    _currentUser = _authService.currentUser;
+    _isAuthenticated = _currentUser != null;
+    _isReady = true;
+  }
 
-  final LocalAuthService _authService;
+  final AuthService _authService;
+  late final StreamSubscription<AuthUser?> _authSubscription;
 
   bool _isLoading = false;
+  bool _isReady = false;
   bool _isAuthenticated = false;
   bool _rememberSession = true;
   String? _errorMessage;
-  String? _currentUserName;
+  AuthUser? _currentUser;
 
   bool get isLoading => _isLoading;
+  bool get isReady => _isReady;
   bool get isAuthenticated => _isAuthenticated;
   bool get rememberSession => _rememberSession;
   String? get errorMessage => _errorMessage;
-  String get currentUserName => _currentUserName ?? 'Usuario';
+  String get currentUserName => _currentUser?.preferredName ?? 'Usuario';
+  String? get currentUserUid => _currentUser?.uid;
+  String? get currentUserEmail => _currentUser?.email;
 
   void setRememberSession(bool value) {
     if (_rememberSession == value) {
@@ -36,24 +49,33 @@ class AuthController extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
 
-    final result = await _authService.login(
-      identifier: identifier,
-      password: password,
-    );
-
-    _isLoading = false;
-    _isAuthenticated = result.isSuccess;
-    _errorMessage = result.isSuccess ? null : result.message;
-    _currentUserName = result.userName;
-    notifyListeners();
-
-    return result.isSuccess;
+    try {
+      await _authService.signIn(
+        email: identifier,
+        password: password,
+        rememberSession: _rememberSession,
+      );
+      _currentUser = _authService.currentUser;
+      _isAuthenticated = _currentUser != null;
+      return _isAuthenticated;
+    } on AuthException catch (error) {
+      _errorMessage = error.message;
+      _isAuthenticated = false;
+      return false;
+    } catch (_) {
+      _errorMessage =
+          'No fue posible iniciar sesion en este momento. Intenta de nuevo.';
+      _isAuthenticated = false;
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  void logout() {
-    _isAuthenticated = false;
+  Future<void> logout() async {
     _errorMessage = null;
-    notifyListeners();
+    await _authService.signOut();
   }
 
   void clearError() {
@@ -68,5 +90,18 @@ class AuthController extends ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  void _handleAuthChange(AuthUser? user) {
+    _currentUser = user;
+    _isAuthenticated = user != null;
+    _isReady = true;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
   }
 }

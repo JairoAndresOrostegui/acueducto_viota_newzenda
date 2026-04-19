@@ -1,0 +1,29 @@
+{
+  "functions": {
+    "source": "functions"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "frontacueductonewzenda",
+          "appId": "1:2143866903:android:251a4add47363bf1544c52",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "frontacueductonewzenda",
+          "configurations": {
+            "android": "1:2143866903:android:251a4add47363bf1544c52",
+            "web": "1:2143866903:web:754ff6281506b5e4544c52"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "2143866903",
+    "project_id": "frontacueductonewzenda",
+    "storage_bucket": "frontacueductonewzenda.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2143866903:android:251a4add47363bf1544c52",
+        "android_client_info": {
+          "package_name": "com.example.frontacueductonewzenda"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAcrhnDPCZgCI1obcJ72JIVZb7rPqn5NOI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

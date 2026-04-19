@@ -1,25 +1,24 @@
 # Acueducto Viota Newzenda
 
-Base inicial en Flutter para el sistema del acueducto veredal de Quitasol y Jazmin, municipio de Viota, Cundinamarca.
+Aplicacion Flutter para el sistema del acueducto veredal de Quitasol y Jazmin, municipio de Viota, Cundinamarca.
 
 ## Estado actual
 
-- Login responsivo para Android, iOS, web y escritorio.
-- Tema global con paleta azul y verde enfocada en identidad de agua y territorio.
-- Estilos consistentes para botones, formularios, tarjetas, mensajes y textos.
-- Flujo de autenticacion local inicial para avanzar mientras se conecta un backend real.
-
-## Credenciales demo
-
-- Usuario: `admin@acueductoviota.com`
-- Clave: `Agua2026*`
+- Soporte objetivo: Android y Web.
+- Login responsivo con autenticacion real en Firebase.
+- Panel administrativo con CRUD de usuarios, tipos de documento, roles y sectores.
+- Auditoria visual de ediciones y eliminaciones de usuarios.
+- Tema global consistente con la identidad del proyecto.
 
 ## Estructura base
 
 - `lib/app`: configuracion principal de la app.
 - `lib/theme`: paleta y tema global.
-- `lib/features/auth`: login, controlador y autenticacion local.
-- `lib/features/home`: pantalla inicial posterior al login.
+- `lib/features/auth`: login y autenticacion con Firebase.
+- `lib/features/admin`: consola administrativa principal.
+- `lib/features/catalogs`: CRUDs de catalogos.
+- `lib/features/users`: CRUD de usuarios y logs de auditoria.
+- `functions/`: Cloud Functions para crear, editar y eliminar usuarios administrados.
 
 ## Comandos utiles
 
@@ -28,8 +27,25 @@ flutter pub get
 flutter analyze
 flutter test
 flutter run
+firebase deploy --only functions --project frontacueductonewzenda
+firebase deploy --only firestore --project frontacueductonewzenda
 ```
 
-## Siguiente paso recomendado
+## Firebase
 
-Conectar autenticacion real y empezar los modulos de suscriptores, lecturas, facturacion y recaudo.
+- Proyecto: `frontacueductonewzenda`
+- Plataformas configuradas: Android y Web
+- Archivo generado: `lib/firebase_options.dart`
+- Colecciones base:
+  - `usuarios`
+  - `usuarios_logs`
+  - `tipos_documento`
+  - `roles`
+  - `sectores`
+
+## Reglas de datos
+
+- La base de datos guarda en minuscula `nombre`, `correo`, `rol`, `estado`, `sector` y `tipoDocumento`.
+- La UI capitaliza esos valores solo al mostrarlos.
+- Los catalogos de tipos de documento y roles se inicializan automaticamente si estan vacios.
+- Los sectores se administran desde su propio CRUD y solo se ofrecen activos en usuarios cuando el rol es `cliente`.

@@ -1,75 +1,138 @@
 import 'package:flutter/material.dart';
 
+import '../../../admin/presentation/pages/admin_console_page.dart';
+import '../../../catalogs/data/catalog_firestore_service.dart';
+import '../../../users/data/user_firestore_service.dart';
+import '../../../users/data/user_admin_functions_service.dart';
+import '../../../users/data/user_audit_log_service.dart';
+import '../../../users/domain/app_user.dart';
 import '../../../../theme/app_colors.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
     super.key,
+    required this.currentUserUid,
     required this.userName,
     required this.onLogout,
+    this.userService,
+    this.userAdminFunctionsService,
+    this.documentTypeService,
+    this.roleService,
+    this.sectorService,
+    this.userAuditLogService,
   });
 
+  final String currentUserUid;
   final String userName;
-  final VoidCallback onLogout;
+  final Future<void> Function() onLogout;
+  final UserFirestoreService? userService;
+  final UserAdminFunctionsService? userAdminFunctionsService;
+  final DocumentTypeCatalogService? documentTypeService;
+  final RoleCatalogService? roleService;
+  final SectorCatalogService? sectorService;
+  final UserAuditLogService? userAuditLogService;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Panel principal'),
         actions: [
           TextButton.icon(
-            onPressed: onLogout,
+            onPressed: () async {
+              await onLogout();
+            },
             icon: const Icon(Icons.logout_rounded),
             label: const Text('Salir'),
           ),
           const SizedBox(width: 12),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: Padding(
+      body: FutureBuilder<AppUser?>(
+        future: (userService ?? UserFirestoreService()).getUser(currentUserUid),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            return _ProfileMissingView(
+              userName: userName,
+              currentUserUid: currentUserUid,
+            );
+          }
+
+          final currentUser = snapshot.data!;
+
+          if (currentUser.rol != 'administrador' ||
+              currentUser.estado != 'activo') {
+            return _NoAccessView(
+              userName: userName,
+              role: currentUser.rol,
+              estado: currentUser.estado,
+            );
+          }
+
+          return Padding(
             padding: const EdgeInsets.all(20),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: AdminConsolePage(
+                  currentUser: currentUser,
+                  userService: userService,
+                  userAdminFunctionsService: userAdminFunctionsService,
+                  documentTypeService: documentTypeService,
+                  roleService: roleService,
+                  sectorService: sectorService,
+                  userAuditLogService: userAuditLogService,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProfileMissingView extends StatelessWidget {
+  const _ProfileMissingView({
+    required this.userName,
+    required this.currentUserUid,
+  });
+
+  final String userName;
+  final String currentUserUid;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 920),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE0ECE8)),
+            ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: const Color(0xFFE0ECE8)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bienvenido, $userName',
-                        style: textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'La base visual y de autenticacion ya quedo lista. El siguiente paso es conectar este acceso con usuarios reales y construir los modulos operativos del acueducto.',
-                        style: textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 24),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: const [
-                          _StatusChip(label: 'Lecturas'),
-                          _StatusChip(label: 'Facturacion'),
-                          _StatusChip(label: 'Suscriptores'),
-                          _StatusChip(label: 'PQRS'),
-                        ],
-                      ),
-                    ],
-                  ),
+                Text(
+                  'Bienvenido, $userName',
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
+                const SizedBox(height: 10),
+                Text(
+                  'Tu usuario existe en Firebase Authentication, pero aun no tiene perfil en Firestore dentro de la coleccion usuarios.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 18),
+                Text('UID actual: $currentUserUid'),
               ],
             ),
           ),
@@ -79,24 +142,40 @@ class HomePage extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.label});
+class _NoAccessView extends StatelessWidget {
+  const _NoAccessView({
+    required this.userName,
+    required this.role,
+    required this.estado,
+  });
 
-  final String label;
+  final String userName;
+  final String role;
+  final String estado;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.brandBlueSoft,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: AppColors.brandBlueDark,
-          fontWeight: FontWeight.w600,
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: const Color(0xFFE0ECE8)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Acceso restringido para $userName',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Este modulo solo esta disponible para administradores activos. Perfil actual: $role / $estado.',
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );

@@ -42,7 +42,7 @@ class _LoginFormState extends State<LoginForm> {
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Correo institucional',
-                  hintText: 'admin@acueductoviota.com',
+                  hintText: 'usuario@acueducto.com',
                   prefixIcon: Icon(Icons.alternate_email_rounded),
                 ),
                 validator: (value) {
@@ -114,10 +114,6 @@ class _LoginFormState extends State<LoginForm> {
                       ],
                     ),
                   ),
-                  TextButton(
-                    onPressed: widget.controller.isLoading ? null : () {},
-                    child: const Text('Recuperar clave'),
-                  ),
                 ],
               ),
               if (widget.controller.errorMessage case final message?)
@@ -162,29 +158,9 @@ class _LoginFormState extends State<LoginForm> {
                     : const Text('Ingresar'),
               ),
               const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Acceso demo inicial',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text('Usuario: admin@acueductoviota.com'),
-                    SizedBox(height: 2),
-                    Text('Clave: Agua2026*'),
-                  ],
-                ),
+              Text(
+                'Usa un usuario creado en Firebase Authentication para ingresar.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),
