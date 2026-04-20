@@ -169,6 +169,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
         user.estado.toLowerCase().contains(q) ||
         user.numeroDocumento.toLowerCase().contains(q) ||
         user.tipoDocumento.toLowerCase().contains(q) ||
+        user.numeroContador.join(' ').toLowerCase().contains(q) ||
         user.sector.toLowerCase().contains(q);
   }
 
@@ -324,9 +325,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
       );
   late final TextEditingController _numeroContadorController =
       TextEditingController(
-        text: widget.user?.numeroContador == 'na'
+        text: widget.user == null || widget.user!.numeroContador.isEmpty
             ? ''
-            : widget.user?.numeroContador ?? '',
+            : widget.user!.numeroContador.join('\n'),
       );
   late final TextEditingController _correoController =
       TextEditingController(text: widget.user?.correo ?? '');
@@ -445,11 +446,11 @@ class _UserFormDialogState extends State<UserFormDialog> {
                             width: width,
                             child: _text(
                               _numeroContadorController,
-                              'Numero contador',
+                              'Codigos contador',
                               enabled: _isClient,
-                              validator: _isClient ? _numericRequired : null,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: _digitsOnlyInputFormatters,
+                              validator:
+                                  _isClient ? _meterNumbersValidator : null,
+                              keyboardType: TextInputType.multiline,
                             ),
                           ),
                           _FieldBox(width: width, child: _selectSector()),
@@ -732,6 +733,24 @@ class _UserFormDialogState extends State<UserFormDialog> {
     return null;
   }
 
+  String? _meterNumbersValidator(String? value) {
+    final base = _required(value);
+    if (base != null) {
+      return base;
+    }
+    final items = _parseMeterNumbers(value ?? '');
+    if (items.isEmpty) {
+      return 'Ingresa al menos un contador.';
+    }
+    if (items.any((item) => !RegExp(r'^\d+$').hasMatch(item))) {
+      return 'Cada contador debe contener solo números.';
+    }
+    if (items.toSet().length != items.length) {
+      return 'No repitas contadores dentro del mismo usuario.';
+    }
+    return null;
+  }
+
   String? _emailValidator(String? value) {
     final base = _required(value);
     if (base != null) {
@@ -825,7 +844,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
       numeroDocumento: _numeroDocumentoController.text.trim(),
       numeroContacto: _numeroContactoController.text.trim(),
       codigoUsuario: _isClient ? _codigoUsuarioController.text.trim() : 'na',
-      numeroContador: _isClient ? _numeroContadorController.text.trim() : 'na',
+      numeroContador: _isClient
+          ? _parseMeterNumbers(_numeroContadorController.text)
+          : const [],
       rol: _rol!,
       tipoCliente: _isClient ? _tipoCliente : 'na',
       sector: _isClient ? (_sector ?? '') : 'na',
@@ -843,6 +864,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
             : _passwordController.text.trim(),
       ),
     );
+  }
+
+  List<String> _parseMeterNumbers(String value) {
+    return value
+        .split(RegExp(r'[\n,;]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty && item.toLowerCase() != 'na')
+        .toList();
   }
 }
 
@@ -1064,10 +1093,10 @@ class _UserCard extends StatelessWidget {
                         : user.codigoUsuario,
                   ),
                   _InfoChip(
-                    label: 'Contador',
-                    value: user.numeroContador == 'na'
+                    label: 'Contadores',
+                    value: user.numeroContador.isEmpty
                         ? 'NA'
-                        : user.numeroContador,
+                        : user.numeroContador.join(', '),
                   ),
                   _InfoChip(
                     label: 'Sector',

@@ -46,6 +46,30 @@ function normalizeLowercase(value, field) {
   return normalizeString(value, field).toLowerCase();
 }
 
+function normalizeStringList(value, field) {
+  if (!Array.isArray(value)) {
+    throw new HttpsError('invalid-argument', `El campo ${field} debe ser una lista.`);
+  }
+
+  const normalized = value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter((item) => item && item.toLowerCase() !== 'na');
+
+  if (normalized.length === 0) {
+    throw new HttpsError('invalid-argument', `El campo ${field} es obligatorio.`);
+  }
+
+  const unique = [...new Set(normalized)];
+  if (unique.length !== normalized.length) {
+    throw new HttpsError(
+      'invalid-argument',
+      `El campo ${field} no puede tener contadores repetidos.`,
+    );
+  }
+
+  return unique;
+}
+
 function mapAdminError(error) {
   switch (error?.code) {
     case 'auth/email-already-exists':
@@ -178,7 +202,7 @@ async function buildUserPayload(uid, data, previous = null) {
     numeroDocumento: normalizeString(data.numeroDocumento, 'numeroDocumento'),
     numeroContacto: normalizeString(data.numeroContacto, 'numeroContacto'),
     codigoUsuario: 'na',
-    numeroContador: 'na',
+    numeroContador: [],
     rol: role.valor,
     tipoCliente: 'na',
     sector: 'na',
@@ -213,7 +237,7 @@ async function buildUserPayload(uid, data, previous = null) {
       'sector',
     );
     payload.codigoUsuario = normalizeString(data.codigoUsuario, 'codigoUsuario');
-    payload.numeroContador = normalizeString(data.numeroContador, 'numeroContador');
+    payload.numeroContador = normalizeStringList(data.numeroContador, 'numeroContador');
     payload.sector = sector.valor;
   }
 

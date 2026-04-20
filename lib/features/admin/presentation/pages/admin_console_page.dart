@@ -3,6 +3,7 @@ import 'package:frontacueductonewzenda/features/billing/payment_methods/presenta
 import 'package:frontacueductonewzenda/features/billing/periods/presentation/pages/billing_periods_page.dart';
 import 'package:frontacueductonewzenda/features/billing/values/presentation/pages/billing_values_admin_page.dart';
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
+import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
 
 import '../../../../theme/app_colors.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
@@ -122,7 +123,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     ),
                   ],
                 ),
-                const _AdminGroupSection(
+                _AdminGroupSection(
                   tabs: [
                     Tab(text: 'Consumos'),
                     Tab(text: 'Registrar consumos'),
@@ -132,9 +133,8 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     AdminPlaceholderPage(
                       message: 'Aqui va el modulo de consumos',
                     ),
-                    AdminPlaceholderPage(
-                      message:
-                          'Aqui va el registro de consumos y la sincronizacion con la app',
+                    ConsumptionRegisterPage(
+                      currentUser: widget.currentUser,
                     ),
                     AdminPlaceholderPage(
                       message:

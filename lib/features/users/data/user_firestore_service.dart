@@ -24,6 +24,15 @@ class UserFirestoreService {
     return snapshot.docs.map(AppUser.fromFirestore).toList();
   }
 
+  Future<List<AppUser>> fetchActiveClients({int limit = 500}) async {
+    final users = await fetchUsers(limit: limit);
+    return users
+        .where((user) => user.rol == 'cliente' && user.estado == 'activo')
+        .where((user) => user.codigoUsuario != 'na')
+        .where((user) => user.numeroContador.isNotEmpty)
+        .toList();
+  }
+
   Future<AppUser?> getUser(String uid) async {
     final snapshot = await _usersCollection.doc(uid).get();
     if (!snapshot.exists) {

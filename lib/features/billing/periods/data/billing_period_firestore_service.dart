@@ -27,6 +27,20 @@ class BillingPeriodFirestoreService {
     });
   }
 
+  Future<BillingPeriod?> fetchActivePeriod() async {
+    final snapshot = await _collection
+        .orderBy('fechaCreacion', descending: true)
+        .limit(50)
+        .get();
+    for (final doc in snapshot.docs) {
+      final item = BillingPeriod.fromFirestore(doc);
+      if (item.vigente) {
+        return item;
+      }
+    }
+    return null;
+  }
+
   Future<void> createPeriod({
     required int ano,
     required int mes,

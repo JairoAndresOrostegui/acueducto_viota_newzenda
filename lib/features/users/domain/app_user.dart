@@ -24,7 +24,7 @@ class AppUser {
   final String numeroDocumento;
   final String numeroContacto;
   final String codigoUsuario;
-  final String numeroContador;
+  final List<String> numeroContador;
   final String rol;
   final String tipoCliente;
   final String sector;
@@ -51,7 +51,7 @@ class AppUser {
     String? numeroDocumento,
     String? numeroContacto,
     String? codigoUsuario,
-    String? numeroContador,
+    List<String>? numeroContador,
     String? rol,
     String? tipoCliente,
     String? sector,
@@ -90,7 +90,7 @@ class AppUser {
       numeroDocumento: data['numeroDocumento'] as String? ?? '',
       numeroContacto: data['numeroContacto'] as String? ?? '',
       codigoUsuario: data['codigoUsuario'] as String? ?? '',
-      numeroContador: data['numeroContador'] as String? ?? '',
+      numeroContador: _toMeterList(data['numeroContador']),
       rol: data['rol'] as String? ?? '',
       tipoCliente: data['tipoCliente'] as String? ?? 'na',
       sector: data['sector'] as String? ?? '',
@@ -133,5 +133,23 @@ class AppUser {
       return value.toDate();
     }
     return null;
+  }
+
+  static List<String> _toMeterList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<String>()
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty && item.toLowerCase() != 'na')
+          .toList();
+    }
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized.isEmpty || normalized.toLowerCase() == 'na') {
+        return const [];
+      }
+      return [normalized];
+    }
+    return const [];
   }
 }

@@ -1,0 +1,585 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../core/presentation/text_formatters.dart';
+import '../../../../theme/app_colors.dart';
+import '../../../billing/periods/data/billing_period_firestore_service.dart';
+import '../../../consumptions/data/consumption_firestore_service.dart';
+import '../../../consumptions/data/consumption_local_cache_service.dart';
+import '../../../consumptions/domain/consumption_customer.dart';
+import '../../../consumptions/domain/consumption_reading.dart';
+import '../../../users/data/user_firestore_service.dart';
+import '../../../users/domain/app_user.dart';
+
+class ConsumptionRegisterPage extends StatefulWidget {
+  const ConsumptionRegisterPage({
+    super.key,
+    required this.currentUser,
+    this.userService,
+    this.periodService,
+    this.firestoreService,
+    this.localCacheService,
+  });
+
+  final AppUser currentUser;
+  final UserFirestoreService? userService;
+  final BillingPeriodFirestoreService? periodService;
+  final ConsumptionFirestoreService? firestoreService;
+  final ConsumptionLocalCacheService? localCacheService;
+
+  @override
+  State<ConsumptionRegisterPage> createState() => _ConsumptionRegisterPageState();
+}
+
+class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
+  late final UserFirestoreService _userService =
+      widget.userService ?? UserFirestoreService();
+  late final BillingPeriodFirestoreService _periodService =
+      widget.periodService ?? BillingPeriodFirestoreService();
+  late final ConsumptionFirestoreService _firestoreService =
+      widget.firestoreService ?? ConsumptionFirestoreService();
+  late final ConsumptionLocalCacheService _localCacheService =
+      widget.localCacheService ?? ConsumptionLocalCacheService();
+
+  final TextEditingController _searchController = TextEditingController();
+  bool _isBusy = false;
+  String _query = '';
+  String? _activePeriod;
+  List<ConsumptionCustomer> _customers = const [];
+  List<ConsumptionReading> _readings = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocalState();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredCustomers = _filteredCustomers();
+    final pendingCount = _readings.where((item) => !item.isSynced).length;
+
+    return Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: _isBusy,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Header(
+                activePeriod: _activePeriod,
+                cachedClients: _customers.length,
+                pendingCount: pendingCount,
+                onSync: _syncAll,
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: const InputDecoration(
+                  labelText: 'Buscar por código de contador o código de usuario',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: filteredCustomers.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No hay clientes sincronizados o no coinciden con la búsqueda.',
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: filteredCustomers.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final customer = filteredCustomers[index];
+                          final reading = _readingFor(customer.codigoContador);
+                          return _ConsumptionCustomerCard(
+                            customer: customer,
+                            activePeriod: _activePeriod,
+                            reading: reading,
+                            onRegister: _activePeriod == null || reading != null
+                                ? null
+                                : () => _openRegisterDialog(customer),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+        if (_isBusy)
+          Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.textPrimary.withValues(alpha: 0.18),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _loadLocalState() async {
+    final period = await _localCacheService.loadActivePeriod();
+    final customers = await _localCacheService.loadCustomers();
+    final readings = await _localCacheService.loadReadings();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activePeriod = period;
+      _customers = customers;
+      _readings = readings;
+    });
+  }
+
+  List<ConsumptionCustomer> _filteredCustomers() {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return _customers;
+    }
+    return _customers.where((item) => item.searchText.contains(query)).toList();
+  }
+
+  ConsumptionReading? _readingFor(String meterCode) {
+    final period = _activePeriod;
+    if (period == null) {
+      return null;
+    }
+    for (final item in _readings) {
+      if (item.codigoContador == meterCode && item.periodoActual == period) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _syncAll() async {
+    setState(() => _isBusy = true);
+    try {
+      var readings = await _localCacheService.loadReadings();
+
+      for (var index = 0; index < readings.length; index++) {
+        final item = readings[index];
+        if (!item.isSynced) {
+          await _firestoreService.saveReading(
+            item.copyWith(estado: 'sincronizado'),
+          );
+          readings[index] = item.copyWith(estado: 'sincronizado');
+        }
+      }
+
+      final activePeriod = await _periodService.fetchActivePeriod();
+      final clients = await _userService.fetchActiveClients();
+      final customerCache = _buildCustomerCache(clients);
+
+      if (activePeriod != null) {
+        final remoteReadings = await _firestoreService.fetchReadingsForPeriod(
+          activePeriod.clave,
+        );
+        readings = _mergeReadings(readings, remoteReadings);
+        await _localCacheService.saveActivePeriod(activePeriod.clave);
+      }
+
+      await _localCacheService.saveCustomers(customerCache);
+      await _localCacheService.saveReadings(readings);
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activePeriod = activePeriod?.clave;
+        _customers = customerCache;
+        _readings = readings;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sincronización completada correctamente.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No fue posible sincronizar: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
+
+  List<ConsumptionCustomer> _buildCustomerCache(List<AppUser> users) {
+    final items = <ConsumptionCustomer>[];
+    for (final user in users) {
+      for (final meter in user.numeroContador) {
+        items.add(
+          ConsumptionCustomer(
+            codigoUsuario: user.codigoUsuario,
+            codigoContador: meter,
+            nombreUsuario: user.nombre,
+          ),
+        );
+      }
+    }
+    items.sort((a, b) => a.nombreUsuario.compareTo(b.nombreUsuario));
+    return items;
+  }
+
+  List<ConsumptionReading> _mergeReadings(
+    List<ConsumptionReading> local,
+    List<ConsumptionReading> remote,
+  ) {
+    final merged = <String, ConsumptionReading>{};
+    for (final item in local) {
+      merged[item.id] = item;
+    }
+    for (final item in remote) {
+      merged[item.id] = item.copyWith(estado: 'sincronizado');
+    }
+    final values = merged.values.toList()
+      ..sort((a, b) => b.fecha.compareTo(a.fecha));
+    return values;
+  }
+
+  Future<void> _openRegisterDialog(ConsumptionCustomer customer) async {
+    final period = _activePeriod;
+    if (period == null) {
+      return;
+    }
+
+    final reading = await showDialog<ConsumptionReading>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _ReadingDialog(
+        customer: customer,
+        period: period,
+        currentUser: widget.currentUser,
+      ),
+    );
+
+    if (reading == null) {
+      return;
+    }
+
+    final readings = await _localCacheService.loadReadings();
+    final updated = _mergeReadings(readings, [reading]);
+    await _localCacheService.saveReadings(updated);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _readings = updated);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lectura guardada en el dispositivo.'),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.activePeriod,
+    required this.cachedClients,
+    required this.pendingCount,
+    required this.onSync,
+  });
+
+  final String? activePeriod;
+  final int cachedClients;
+  final int pendingCount;
+  final VoidCallback onSync;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        final info = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Registrar consumos',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sincroniza el período vigente y la lista de clientes para capturar lecturas sin conexión y luego subirlas al sistema.',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Período vigente: ${activePeriod ?? 'Sin sincronizar'} · Clientes cacheados: $cachedClients · Pendientes: $pendingCount',
+            ),
+          ],
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              info,
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: onSync,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                ),
+                icon: const Icon(Icons.sync_rounded),
+                label: const Text('Sincronizar'),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: info),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
+              onPressed: onSync,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(0, 48),
+              ),
+              icon: const Icon(Icons.sync_rounded),
+              label: const Text('Sincronizar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ConsumptionCustomerCard extends StatelessWidget {
+  const _ConsumptionCustomerCard({
+    required this.customer,
+    required this.activePeriod,
+    required this.reading,
+    required this.onRegister,
+  });
+
+  final ConsumptionCustomer customer;
+  final String? activePeriod;
+  final ConsumptionReading? reading;
+  final VoidCallback? onRegister;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final info = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                toDisplayUserName(customer.nombreUsuario),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Código usuario: ${customer.codigoUsuario} · Contador: ${customer.codigoContador}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Período: ${activePeriod ?? 'Sin sincronizar'}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (reading != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Lectura actual: ${reading!.lecturaActual}',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Estado: ${reading!.estado} · Operario: ${toDisplayUserName(reading!.nombreOperario)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ],
+          );
+          final action = reading == null
+              ? ElevatedButton.icon(
+                  onPressed: onRegister,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                  ),
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('Registrar lectura'),
+                )
+              : OutlinedButton.icon(
+                  onPressed: null,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                  ),
+                  icon: const Icon(Icons.visibility_rounded),
+                  label: const Text('Lectura tomada'),
+                );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                info,
+                const SizedBox(height: 16),
+                action,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: info),
+              const SizedBox(width: 12),
+              action,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ReadingDialog extends StatefulWidget {
+  const _ReadingDialog({
+    required this.customer,
+    required this.period,
+    required this.currentUser,
+  });
+
+  final ConsumptionCustomer customer;
+  final String period;
+  final AppUser currentUser;
+
+  @override
+  State<_ReadingDialog> createState() => _ReadingDialogState();
+}
+
+class _ReadingDialogState extends State<_ReadingDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _readingController = TextEditingController();
+
+  @override
+  void dispose() {
+    _readingController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Registrar lectura',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 20),
+                  Text('Período: ${widget.period}'),
+                  const SizedBox(height: 8),
+                  Text('Código usuario: ${widget.customer.codigoUsuario}'),
+                  const SizedBox(height: 8),
+                  Text('Código contador: ${widget.customer.codigoContador}'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Usuario: ${toDisplayUserName(widget.customer.nombreUsuario)}',
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _readingController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Lectura actual',
+                    ),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (text.isEmpty) {
+                        return 'Campo obligatorio.';
+                      }
+                      if (int.tryParse(text) == null) {
+                        return 'Solo se permiten números.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancelar'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                        child: const Text('Guardar en dispositivo'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final reading = ConsumptionReading(
+      id: '${widget.period}|${widget.customer.codigoContador}',
+      codigoUsuario: widget.customer.codigoUsuario,
+      codigoContador: widget.customer.codigoContador,
+      nombreUsuario: widget.customer.nombreUsuario,
+      lecturaActual: int.parse(_readingController.text.trim()),
+      periodoActual: widget.period,
+      fecha: now,
+      nombreOperario: widget.currentUser.nombre,
+      actorUid: widget.currentUser.uid,
+      estado: 'pendiente',
+    );
+
+    Navigator.of(context).pop(reading);
+  }
+}

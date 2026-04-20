@@ -66,5 +66,10 @@ service cloud.firestore {
     match /valores_facturacion/{valorId} {
       allow read, create, update, delete: if isAdmin();
     }
+
+    match /consumos/{consumoId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
+    }
   }
 }
