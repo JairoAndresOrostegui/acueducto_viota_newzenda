@@ -62,5 +62,9 @@ service cloud.firestore {
     match /medios_pago/{medioPagoId} {
       allow read, create, update, delete: if isAdmin();
     }
+
+    match /valores_facturacion/{valorId} {
+      allow read, create, update, delete: if isAdmin();
+    }
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontacueductonewzenda/features/billing/payment_methods/presentation/pages/payment_methods_admin_page.dart';
 import 'package:frontacueductonewzenda/features/billing/periods/presentation/pages/billing_periods_page.dart';
+import 'package:frontacueductonewzenda/features/billing/values/presentation/pages/billing_values_admin_page.dart';
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
 
 import '../../../../theme/app_colors.dart';
@@ -41,7 +42,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           Container(
@@ -59,6 +60,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
               dividerColor: Colors.transparent,
               tabs: const [
                 Tab(text: 'Usuarios'),
+                Tab(text: 'Consumos'),
                 Tab(text: 'Facturacion'),
               ],
             ),
@@ -122,6 +124,26 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                 ),
                 const _AdminGroupSection(
                   tabs: [
+                    Tab(text: 'Consumos'),
+                    Tab(text: 'Registrar consumos'),
+                    Tab(text: 'Registrar pagos'),
+                  ],
+                  children: [
+                    AdminPlaceholderPage(
+                      message: 'Aqui va el modulo de consumos',
+                    ),
+                    AdminPlaceholderPage(
+                      message:
+                          'Aqui va el registro de consumos y la sincronizacion con la app',
+                    ),
+                    AdminPlaceholderPage(
+                      message:
+                          'Aqui va el registro de pagos de los consumos',
+                    ),
+                  ],
+                ),
+                _AdminGroupSection(
+                  tabs: [
                     Tab(text: 'Facturacion'),
                     Tab(text: 'Periodos'),
                     Tab(text: 'Medios de pago'),
@@ -131,7 +153,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     AdminPlaceholderPage(message: 'Aqui va facturacion'),
                     BillingPeriodsPage(),
                     PaymentMethodsAdminPage(),
-                    AdminPlaceholderPage(message: 'Aqui va valores'),
+                    BillingValuesAdminPage(currentUser: widget.currentUser),
                   ],
                 ),
               ],
