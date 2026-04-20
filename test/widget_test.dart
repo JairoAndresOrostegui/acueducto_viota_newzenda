@@ -17,6 +17,11 @@ import 'package:frontacueductonewzenda/features/users/domain/user_audit_log.dart
 
 void main() {
   testWidgets('shows validation errors before submitting login', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       AcueductoViotaApp(
         controller: AuthController(authService: FakeAuthService()),
@@ -29,14 +34,20 @@ void main() {
       ),
     );
 
+    await tester.ensureVisible(find.text('Ingresar'));
     await tester.tap(find.text('Ingresar'));
     await tester.pump();
 
-    expect(find.text('Ingresa el correo de acceso.'), findsOneWidget);
+    expect(find.text('Ingresa el usuario de acceso.'), findsOneWidget);
     expect(find.text('Ingresa la clave.'), findsOneWidget);
   });
 
   testWidgets('allows login with a valid auth service user', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       AcueductoViotaApp(
         controller: AuthController(authService: FakeAuthService()),
@@ -55,6 +66,7 @@ void main() {
     );
     await tester.enterText(find.byType(TextFormField).at(1), 'Segura2026*');
 
+    await tester.ensureVisible(find.text('Ingresar'));
     await tester.tap(find.text('Ingresar'));
     await tester.pump();
     await tester.pumpAndSettle();
@@ -115,6 +127,7 @@ class FakeUserFirestoreService extends UserFirestoreService {
       codigoUsuario: 'NA',
       numeroContador: 'NA',
       rol: 'administrador',
+      tipoCliente: 'na',
       sector: 'NA',
       correo: 'admin@acueducto.com',
       estado: 'activo',

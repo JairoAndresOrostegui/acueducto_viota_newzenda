@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/app_user.dart';
 
@@ -15,7 +16,7 @@ class UserAdminFunctionsService {
     required String password,
   }) async {
     final callable = _client.httpsCallable('createManagedUser');
-    final result = await callable.call({
+    final payload = {
       'nombre': user.nombre,
       'tipoDocumento': user.tipoDocumento,
       'numeroDocumento': user.numeroDocumento,
@@ -23,13 +24,32 @@ class UserAdminFunctionsService {
       'codigoUsuario': user.codigoUsuario,
       'numeroContador': user.numeroContador,
       'rol': user.rol,
+      'tipoCliente': user.tipoCliente,
       'sector': user.sector,
       'correo': user.correo,
       'estado': user.estado,
       'password': password,
-    });
+    };
 
-    return result.data['uid'] as String;
+    debugPrint('createManagedUser payload: $payload');
+
+    try {
+      final result = await callable.call(payload);
+      debugPrint('createManagedUser result: ${result.data}');
+      return result.data['uid'] as String;
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'createManagedUser FirebaseFunctionsException'
+        ' code=${error.code}'
+        ' message=${error.message}'
+        ' details=${error.details}',
+      );
+      rethrow;
+    } catch (error, stackTrace) {
+      debugPrint('createManagedUser unexpected error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
   }
 
   Future<void> updateManagedUser({
@@ -37,7 +57,7 @@ class UserAdminFunctionsService {
     String? password,
   }) async {
     final callable = _client.httpsCallable('updateManagedUser');
-    await callable.call({
+    final payload = {
       'uid': user.uid,
       'nombre': user.nombre,
       'tipoDocumento': user.tipoDocumento,
@@ -46,11 +66,31 @@ class UserAdminFunctionsService {
       'codigoUsuario': user.codigoUsuario,
       'numeroContador': user.numeroContador,
       'rol': user.rol,
+      'tipoCliente': user.tipoCliente,
       'sector': user.sector,
       'correo': user.correo,
       'estado': user.estado,
       'password': password,
-    });
+    };
+
+    debugPrint('updateManagedUser payload: $payload');
+
+    try {
+      final result = await callable.call(payload);
+      debugPrint('updateManagedUser result: ${result.data}');
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'updateManagedUser FirebaseFunctionsException'
+        ' code=${error.code}'
+        ' message=${error.message}'
+        ' details=${error.details}',
+      );
+      rethrow;
+    } catch (error, stackTrace) {
+      debugPrint('updateManagedUser unexpected error: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
   }
 
   Future<void> deleteManagedUser(String uid) async {

@@ -46,6 +46,36 @@ function normalizeLowercase(value, field) {
   return normalizeString(value, field).toLowerCase();
 }
 
+function mapAdminError(error) {
+  switch (error?.code) {
+    case 'auth/email-already-exists':
+      return new HttpsError(
+        'already-exists',
+        'Ya existe un usuario con ese correo en Firebase Authentication.',
+      );
+    case 'auth/invalid-email':
+      return new HttpsError(
+        'invalid-argument',
+        'El correo no tiene un formato valido.',
+      );
+    case 'auth/invalid-password':
+      return new HttpsError(
+        'invalid-argument',
+        'La clave no cumple las reglas minimas de Firebase Authentication.',
+      );
+    case 'auth/user-not-found':
+      return new HttpsError(
+        'not-found',
+        'El usuario no existe en Firebase Authentication.',
+      );
+    default:
+      return new HttpsError(
+        'internal',
+        error?.message || 'Ocurrio un error interno al procesar el usuario.',
+      );
+  }
+}
+
 async function getActiveCatalogValue(collectionName, value, field) {
   const normalizedValue = normalizeString(value, field);
   const snapshot = await db
@@ -75,6 +105,7 @@ function sanitizeUserPayload(data) {
     codigoUsuario: data.codigoUsuario,
     numeroContador: data.numeroContador,
     rol: data.rol,
+    tipoCliente: data.tipoCliente,
     sector: data.sector,
     correo: data.correo,
     estado: data.estado,
@@ -149,6 +180,7 @@ async function buildUserPayload(uid, data, previous = null) {
     codigoUsuario: 'na',
     numeroContador: 'na',
     rol: role.valor,
+    tipoCliente: 'na',
     sector: 'na',
     correo: normalizeLowercase(data.correo, 'correo'),
     estado: normalizeLowercase(data.estado, 'estado'),
@@ -167,6 +199,14 @@ async function buildUserPayload(uid, data, previous = null) {
   }
 
   if (payload.rol === 'cliente') {
+    payload.tipoCliente = normalizeLowercase(data.tipoCliente, 'tipoCliente');
+    if (!['socio', 'suscriptor'].includes(payload.tipoCliente)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'El tipo de cliente debe ser socio o suscriptor.',
+      );
+    }
+
     const sector = await getActiveCatalogValue(
       SECTOR_COLLECTION,
       normalizeLowercase(data.sector, 'sector'),
@@ -180,84 +220,98 @@ async function buildUserPayload(uid, data, previous = null) {
   return payload;
 }
 
-exports.createManagedUser = onCall(async (request) => {
+exports.createManagedUser = onCall({ cors: true, invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Debes iniciar sesion.');
   }
 
-  const actor = await getAdminProfile(request.auth.uid);
-  const data = request.data ?? {};
-  const email = normalizeLowercase(data.correo, 'correo');
-  const password = normalizeString(data.password, 'password');
+  try {
+    const actor = await getAdminProfile(request.auth.uid);
+    const data = request.data ?? {};
+    const email = normalizeLowercase(data.correo, 'correo');
+    const password = normalizeString(data.password, 'password');
 
-  const payload = await buildUserPayload('', data);
-  const authUser = await admin.auth().createUser({
-    email,
-    password,
-    displayName: payload.nombre,
-    disabled: payload.estado !== ACTIVE_STATUS,
-  });
+    const payload = await buildUserPayload('', data);
+    const authUser = await admin.auth().createUser({
+      email,
+      password,
+      displayName: payload.nombre,
+      disabled: payload.estado !== ACTIVE_STATUS,
+    });
 
-  const userPayload = await buildUserPayload(authUser.uid, data);
-  await db.collection(USER_COLLECTION).doc(authUser.uid).set(userPayload);
+    const userPayload = await buildUserPayload(authUser.uid, data);
+    await db.collection(USER_COLLECTION).doc(authUser.uid).set(userPayload);
 
-  await writeUserLog({
-    action: 'creacion',
-    actor,
-    targetUid: authUser.uid,
-    targetName: userPayload.nombre,
-    newData: sanitizeUserPayload(userPayload),
-  });
+    await writeUserLog({
+      action: 'creacion',
+      actor,
+      targetUid: authUser.uid,
+      targetName: userPayload.nombre,
+      newData: sanitizeUserPayload(userPayload),
+    });
 
-  return {
-    uid: authUser.uid,
-    email: authUser.email,
-  };
+    return {
+      uid: authUser.uid,
+      email: authUser.email,
+    };
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw mapAdminError(error);
+  }
 });
 
-exports.updateManagedUser = onCall(async (request) => {
+exports.updateManagedUser = onCall({ cors: true, invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Debes iniciar sesion.');
   }
 
-  const actor = await getAdminProfile(request.auth.uid);
-  const data = request.data ?? {};
-  const uid = normalizeString(data.uid, 'uid');
-  const userRef = db.collection(USER_COLLECTION).doc(uid);
-  const existing = await userRef.get();
+  try {
+    const actor = await getAdminProfile(request.auth.uid);
+    const data = request.data ?? {};
+    const uid = normalizeString(data.uid, 'uid');
+    const userRef = db.collection(USER_COLLECTION).doc(uid);
+    const existing = await userRef.get();
 
-  if (!existing.exists) {
-    throw new HttpsError('not-found', 'El perfil no existe en Firestore.');
+    if (!existing.exists) {
+      throw new HttpsError('not-found', 'El perfil no existe en Firestore.');
+    }
+
+    const previous = existing.data();
+    const payload = await buildUserPayload(uid, data, previous);
+
+    const authUpdate = {
+      email: payload.correo,
+      displayName: payload.nombre,
+      disabled: payload.estado !== ACTIVE_STATUS,
+    };
+
+    if (typeof data.password === 'string' && data.password.trim() !== '') {
+      authUpdate.password = data.password.trim();
+    }
+
+    await admin.auth().updateUser(uid, authUpdate);
+    await userRef.set(payload, { merge: true });
+    await writeUserLog({
+      action: 'edicion',
+      actor,
+      targetUid: uid,
+      targetName: payload.nombre,
+      previousData: sanitizeUserPayload(previous),
+      newData: sanitizeUserPayload(payload),
+    });
+
+    return { uid };
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    throw mapAdminError(error);
   }
-
-  const previous = existing.data();
-  const payload = await buildUserPayload(uid, data, previous);
-
-  const authUpdate = {
-    email: payload.correo,
-    displayName: payload.nombre,
-    disabled: payload.estado !== ACTIVE_STATUS,
-  };
-
-  if (typeof data.password === 'string' && data.password.trim() !== '') {
-    authUpdate.password = data.password.trim();
-  }
-
-  await admin.auth().updateUser(uid, authUpdate);
-  await userRef.set(payload, { merge: true });
-  await writeUserLog({
-    action: 'edicion',
-    actor,
-    targetUid: uid,
-    targetName: payload.nombre,
-    previousData: sanitizeUserPayload(previous),
-    newData: sanitizeUserPayload(payload),
-  });
-
-  return { uid };
 });
 
-exports.deleteManagedUser = onCall(async (request) => {
+exports.deleteManagedUser = onCall({ cors: true, invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Debes iniciar sesion.');
   }

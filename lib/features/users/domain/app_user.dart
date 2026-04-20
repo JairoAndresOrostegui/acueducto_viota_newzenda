@@ -10,6 +10,7 @@ class AppUser {
     required this.codigoUsuario,
     required this.numeroContador,
     required this.rol,
+    required this.tipoCliente,
     required this.sector,
     required this.correo,
     required this.estado,
@@ -25,6 +26,7 @@ class AppUser {
   final String codigoUsuario;
   final String numeroContador;
   final String rol;
+  final String tipoCliente;
   final String sector;
   final String correo;
   final String estado;
@@ -51,6 +53,7 @@ class AppUser {
     String? codigoUsuario,
     String? numeroContador,
     String? rol,
+    String? tipoCliente,
     String? sector,
     String? correo,
     String? estado,
@@ -66,6 +69,7 @@ class AppUser {
       codigoUsuario: codigoUsuario ?? this.codigoUsuario,
       numeroContador: numeroContador ?? this.numeroContador,
       rol: rol ?? this.rol,
+      tipoCliente: tipoCliente ?? this.tipoCliente,
       sector: sector ?? this.sector,
       correo: correo ?? this.correo,
       estado: estado ?? this.estado,
@@ -88,6 +92,7 @@ class AppUser {
       codigoUsuario: data['codigoUsuario'] as String? ?? '',
       numeroContador: data['numeroContador'] as String? ?? '',
       rol: data['rol'] as String? ?? '',
+      tipoCliente: data['tipoCliente'] as String? ?? 'na',
       sector: data['sector'] as String? ?? '',
       correo: data['correo'] as String? ?? '',
       estado: data['estado'] as String? ?? '',
@@ -116,6 +121,7 @@ class AppUser {
       'codigoUsuario': codigoUsuario,
       'numeroContador': numeroContador,
       'rol': rol,
+      'tipoCliente': tipoCliente,
       'sector': sector,
       'correo': correo,
       'estado': estado,
