@@ -54,7 +54,7 @@ class _AcueductoViotaAppState extends State<AcueductoViotaApp> {
       builder: (context, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Acueducto Viota',
+          title: 'Acueducto Viotá',
           theme: AppTheme.lightTheme,
           home: !_authController.isReady
               ? const _AppLoadingView()

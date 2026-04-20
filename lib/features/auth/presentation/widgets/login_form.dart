@@ -34,24 +34,25 @@ class _LoginFormState extends State<LoginForm> {
         return Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               TextFormField(
                 controller: _identifierController,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
+                textAlign: TextAlign.center,
                 decoration: const InputDecoration(
-                  labelText: 'Correo institucional',
-                  hintText: 'usuario@acueducto.com',
+                  labelText: 'Usuario',
+                  hintText: 'Ingresa tu usuario',
                   prefixIcon: Icon(Icons.alternate_email_rounded),
                 ),
                 validator: (value) {
                   final text = value?.trim() ?? '';
                   if (text.isEmpty) {
-                    return 'Ingresa el correo de acceso.';
+                    return 'Ingresa el usuario de acceso.';
                   }
                   if (!text.contains('@') || !text.contains('.')) {
-                    return 'Ingresa un correo válido.';
+                    return 'Ingresa un correo valido.';
                   }
                   return null;
                 },
@@ -62,6 +63,7 @@ class _LoginFormState extends State<LoginForm> {
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 textInputAction: TextInputAction.done,
+                textAlign: TextAlign.center,
                 onFieldSubmitted: (_) => _submit(),
                 decoration: InputDecoration(
                   labelText: 'Clave',
@@ -93,28 +95,22 @@ class _LoginFormState extends State<LoginForm> {
                 onChanged: (_) => widget.controller.clearError(),
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Checkbox(
-                          value: widget.controller.rememberSession,
-                          onChanged: widget.controller.isLoading
-                              ? null
-                              : (value) {
-                                  widget.controller
-                                      .setRememberSession(value ?? false);
-                                },
-                        ),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text('Mantener sesion activa en este equipo'),
-                        ),
-                      ],
-                    ),
+              Center(
+                child: CheckboxListTile(
+                  value: widget.controller.rememberSession,
+                  onChanged: widget.controller.isLoading
+                      ? null
+                      : (value) {
+                          widget.controller.setRememberSession(value ?? false);
+                        },
+                  title: const Text(
+                    'Mantener sesion activa en este equipo',
+                    textAlign: TextAlign.center,
                   ),
-                ],
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
               ),
               if (widget.controller.errorMessage case final message?)
                 Padding(
@@ -123,22 +119,23 @@ class _LoginFormState extends State<LoginForm> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFCECEC),
+                      color: AppColors.error.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFF1CACA)),
+                      border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.3),
+                      ),
                     ),
-                    child: Row(
+                    child: Column(
                       children: [
                         const Icon(
                           Icons.error_outline_rounded,
                           color: AppColors.error,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            message,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
                     ),
@@ -156,11 +153,6 @@ class _LoginFormState extends State<LoginForm> {
                         ),
                       )
                     : const Text('Ingresar'),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Usa un usuario creado en Firebase Authentication para ingresar.',
-                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),

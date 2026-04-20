@@ -1,6 +1,6 @@
-# Acueducto Viota Newzenda
+# Acueducto Viotá Newzenda
 
-Aplicacion Flutter para el sistema del acueducto veredal de Quitasol y Jazmin, municipio de Viota, Cundinamarca.
+Aplicacion Flutter para el sistema del acueducto veredal de Quitasol y Jazmin, municipio de Viotá, Cundinamarca.
 
 ## Estado actual
 
