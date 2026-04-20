@@ -119,6 +119,57 @@ async function getActiveCatalogValue(collectionName, value, field) {
   return snapshot.docs[0].data();
 }
 
+async function ensureUniqueDocumentNumber(uid, numeroDocumento) {
+  const snapshot = await db
+    .collection(USER_COLLECTION)
+    .where('numeroDocumento', '==', numeroDocumento)
+    .limit(5)
+    .get();
+
+  for (const doc of snapshot.docs) {
+    if (doc.id !== uid) {
+      throw new HttpsError(
+        'already-exists',
+        `El número de documento ${numeroDocumento} ya está asignado a otro usuario.`,
+      );
+    }
+  }
+}
+
+async function ensureUniqueClientIdentifiers(uid, codigoUsuario, numeroContador) {
+  const codeSnapshot = await db
+    .collection(USER_COLLECTION)
+    .where('codigoUsuario', '==', codigoUsuario)
+    .limit(5)
+    .get();
+
+  for (const doc of codeSnapshot.docs) {
+    if (doc.id !== uid) {
+      throw new HttpsError(
+        'already-exists',
+        `El código de usuario ${codigoUsuario} ya está asignado a otro cliente.`,
+      );
+    }
+  }
+
+  for (const contador of numeroContador) {
+    const meterSnapshot = await db
+      .collection(USER_COLLECTION)
+      .where('numeroContador', 'array-contains', contador)
+      .limit(5)
+      .get();
+
+    for (const doc of meterSnapshot.docs) {
+      if (doc.id !== uid) {
+        throw new HttpsError(
+          'already-exists',
+          `El contador ${contador} ya está asignado a otro cliente.`,
+        );
+      }
+    }
+  }
+}
+
 function sanitizeUserPayload(data) {
   return {
     uid: data.uid,
@@ -222,6 +273,8 @@ async function buildUserPayload(uid, data, previous = null) {
     );
   }
 
+  await ensureUniqueDocumentNumber(uid, payload.numeroDocumento);
+
   if (payload.rol === 'cliente') {
     payload.tipoCliente = normalizeLowercase(data.tipoCliente, 'tipoCliente');
     if (!['socio', 'suscriptor'].includes(payload.tipoCliente)) {
@@ -239,6 +292,7 @@ async function buildUserPayload(uid, data, previous = null) {
     payload.codigoUsuario = normalizeString(data.codigoUsuario, 'codigoUsuario');
     payload.numeroContador = normalizeStringList(data.numeroContador, 'numeroContador');
     payload.sector = sector.valor;
+    await ensureUniqueClientIdentifiers(uid, payload.codigoUsuario, payload.numeroContador);
   }
 
   return payload;

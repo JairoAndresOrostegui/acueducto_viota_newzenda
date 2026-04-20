@@ -233,8 +233,18 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
               error.code,
         _ => error.toString(),
       };
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No fue posible guardar: $message')),
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No fue posible guardar el usuario'),
+          content: Text(message),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
       );
     } finally {
       if (mounted) {

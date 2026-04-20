@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/presentation/text_formatters.dart';
+import '../../../../theme/app_colors.dart';
 import '../../../admin/presentation/pages/admin_console_page.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
-import '../../../users/data/user_firestore_service.dart';
+import '../../../consumptions/presentation/pages/consumption_register_page.dart';
 import '../../../users/data/user_admin_functions_service.dart';
 import '../../../users/data/user_audit_log_service.dart';
+import '../../../users/data/user_firestore_service.dart';
 import '../../../users/domain/app_user.dart';
-import '../../../../theme/app_colors.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
@@ -63,9 +64,7 @@ class HomePage extends StatelessWidget {
           }
 
           final currentUser = snapshot.data!;
-
-          if (currentUser.rol != 'administrador' ||
-              currentUser.estado != 'activo') {
+          if (currentUser.estado != 'activo') {
             return _NoAccessView(
               userName: userName,
               role: currentUser.rol,
@@ -78,21 +77,49 @@ class HomePage extends StatelessWidget {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1200),
-                child: AdminConsolePage(
-                  currentUser: currentUser,
-                  userService: userService,
-                  userAdminFunctionsService: userAdminFunctionsService,
-                  documentTypeService: documentTypeService,
-                  roleService: roleService,
-                  sectorService: sectorService,
-                  userAuditLogService: userAuditLogService,
-                ),
+                child: _buildRoleHome(currentUser),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  Widget _buildRoleHome(AppUser currentUser) {
+    switch (currentUser.rol) {
+      case 'administrador':
+        return AdminConsolePage(
+          currentUser: currentUser,
+          userService: userService,
+          userAdminFunctionsService: userAdminFunctionsService,
+          documentTypeService: documentTypeService,
+          roleService: roleService,
+          sectorService: sectorService,
+          userAuditLogService: userAuditLogService,
+        );
+      case 'operario':
+        return ConsumptionRegisterPage(
+          currentUser: currentUser,
+          userService: userService,
+        );
+      case 'cliente':
+        return const _SingleModuleShell(
+          title: 'Facturación',
+          message: 'Aquí irá el módulo de facturación para clientes.',
+        );
+      case 'contador':
+        return const _SingleModuleShell(
+          title: 'Reportes',
+          message: 'Aquí irá el módulo de reportes para contador.',
+        );
+      default:
+        return _NoAccessView(
+          userName: currentUser.nombre,
+          role: currentUser.rol,
+          estado: currentUser.estado,
+        );
+    }
   }
 }
 
@@ -173,8 +200,44 @@ class _NoAccessView extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Este módulo solo está disponible para administradores activos. Perfil actual: $role / $estado.',
+              'Este módulo no está disponible para el perfil actual. Perfil: $role / $estado.',
               textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SingleModuleShell extends StatelessWidget {
+  const _SingleModuleShell({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFE0ECE8)),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
           ],
         ),
