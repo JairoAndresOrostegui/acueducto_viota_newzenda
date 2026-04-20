@@ -53,5 +53,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+
+    match /periodos/{periodoId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
+    }
   }
 }
