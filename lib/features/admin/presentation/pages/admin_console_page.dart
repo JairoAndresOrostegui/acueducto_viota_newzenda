@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontacueductonewzenda/features/billing/payment_methods/presentation/pages/payment_methods_admin_page.dart';
 import 'package:frontacueductonewzenda/features/billing/periods/presentation/pages/billing_periods_page.dart';
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
 
@@ -129,7 +130,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                   children: [
                     AdminPlaceholderPage(message: 'Aqui va facturacion'),
                     BillingPeriodsPage(),
-                    AdminPlaceholderPage(message: 'Aqui va medios de pago'),
+                    PaymentMethodsAdminPage(),
                     AdminPlaceholderPage(message: 'Aqui va valores'),
                   ],
                 ),
