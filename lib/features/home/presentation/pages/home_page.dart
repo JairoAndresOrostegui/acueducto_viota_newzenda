@@ -98,7 +98,7 @@ class HomePage extends StatelessWidget {
           sectorService: sectorService,
           userAuditLogService: userAuditLogService,
         );
-      case 'operario':
+      case 'operador':
         return ConsumptionRegisterPage(
           currentUser: currentUser,
           userService: userService,

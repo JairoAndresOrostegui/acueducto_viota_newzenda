@@ -21,22 +21,22 @@ service cloud.firestore {
           currentUserData().estado == 'activo';
     }
 
-    function isOperario() {
+    function isOperador() {
       return signedIn() &&
           exists(currentUserPath()) &&
-          currentUserData().rol == 'operario' &&
+          currentUserData().rol == 'operador' &&
           currentUserData().estado == 'activo';
     }
 
     function canManageConsumptions() {
-      return isAdmin() || isOperario();
+      return isAdmin() || isOperador();
     }
 
     match /usuarios/{userId} {
       allow read: if signedIn() &&
           (request.auth.uid == userId ||
               isAdmin() ||
-              (isOperario() &&
+              (isOperador() &&
                   resource.data.rol == 'cliente' &&
                   resource.data.estado == 'activo'));
 
@@ -91,7 +91,7 @@ service cloud.firestore {
     match /consumos_conflictos/{conflictoId} {
       allow create: if canManageConsumptions();
       allow read: if isAdmin() ||
-          (isOperario() && resource.data.actorUid == request.auth.uid);
+          (isOperador() && resource.data.actorUid == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if false;
     }
