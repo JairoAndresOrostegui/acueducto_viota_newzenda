@@ -3,6 +3,7 @@ import 'package:frontacueductonewzenda/features/billing/payment_methods/presenta
 import 'package:frontacueductonewzenda/features/billing/periods/presentation/pages/billing_periods_page.dart';
 import 'package:frontacueductonewzenda/features/billing/values/presentation/pages/billing_values_admin_page.dart';
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
+import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_conflicts_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
 
 import '../../../../theme/app_colors.dart';
@@ -125,13 +126,13 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                 ),
                 _AdminGroupSection(
                   tabs: [
-                    Tab(text: 'Consumos'),
+                    Tab(text: 'Conflictos'),
                     Tab(text: 'Registrar consumos'),
                     Tab(text: 'Registrar pagos'),
                   ],
                   children: [
-                    AdminPlaceholderPage(
-                      message: 'Aqui va el modulo de consumos',
+                    ConsumptionConflictsAdminPage(
+                      currentUser: widget.currentUser,
                     ),
                     ConsumptionRegisterPage(
                       currentUser: widget.currentUser,

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/presentation/text_formatters.dart';
 import '../../../../theme/app_colors.dart';
 import '../../../billing/periods/data/billing_period_firestore_service.dart';
+import '../../../consumptions/data/consumption_conflict_firestore_service.dart';
 import '../../../consumptions/data/consumption_firestore_service.dart';
 import '../../../consumptions/data/consumption_local_cache_service.dart';
 import '../../../consumptions/domain/consumption_customer.dart';
@@ -18,6 +19,7 @@ class ConsumptionRegisterPage extends StatefulWidget {
     this.userService,
     this.periodService,
     this.firestoreService,
+    this.conflictService,
     this.localCacheService,
   });
 
@@ -25,6 +27,7 @@ class ConsumptionRegisterPage extends StatefulWidget {
   final UserFirestoreService? userService;
   final BillingPeriodFirestoreService? periodService;
   final ConsumptionFirestoreService? firestoreService;
+  final ConsumptionConflictFirestoreService? conflictService;
   final ConsumptionLocalCacheService? localCacheService;
 
   @override
@@ -38,6 +41,8 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       widget.periodService ?? BillingPeriodFirestoreService();
   late final ConsumptionFirestoreService _firestoreService =
       widget.firestoreService ?? ConsumptionFirestoreService();
+  late final ConsumptionConflictFirestoreService _conflictService =
+      widget.conflictService ?? ConsumptionConflictFirestoreService();
   late final ConsumptionLocalCacheService _localCacheService =
       widget.localCacheService ?? ConsumptionLocalCacheService();
 
@@ -63,7 +68,10 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   @override
   Widget build(BuildContext context) {
     final filteredCustomers = _filteredCustomers();
-    final pendingCount = _readings.where((item) => !item.isSynced).length;
+    final pendingCount = _readings
+        .where((item) => !item.isSynced && !item.isBlocked)
+        .length;
+    final blockedCount = _readings.where((item) => item.isBlocked).length;
 
     return Stack(
       children: [
@@ -76,6 +84,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                 activePeriod: _activePeriod,
                 cachedClients: _customers.length,
                 pendingCount: pendingCount,
+                blockedCount: blockedCount,
                 onSync: _syncAll,
               ),
               const SizedBox(height: 20),
@@ -83,7 +92,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                 controller: _searchController,
                 onChanged: (value) => setState(() => _query = value),
                 decoration: const InputDecoration(
-                  labelText: 'Buscar por código de contador o código de usuario',
+                  labelText: 'Buscar por codigo de contador o codigo de usuario',
                   prefixIcon: Icon(Icons.search_rounded),
                 ),
               ),
@@ -92,7 +101,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                 child: filteredCustomers.isEmpty
                     ? const Center(
                         child: Text(
-                          'No hay clientes sincronizados o no coinciden con la búsqueda.',
+                          'No hay clientes sincronizados o no coinciden con la busqueda.',
                         ),
                       )
                     : ListView.separated(
@@ -161,19 +170,108 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     return null;
   }
 
+  ConsumptionReading? _previousReadingFor(
+    String meterCode, {
+    String? beforePeriod,
+  }) {
+    final period = beforePeriod ?? _activePeriod;
+    if (period == null) {
+      return null;
+    }
+    final previous = _readings
+        .where((item) => item.codigoContador == meterCode)
+        .where((item) => item.periodoActual.compareTo(period) < 0)
+        .toList()
+      ..sort((a, b) => b.periodoActual.compareTo(a.periodoActual));
+    return previous.isEmpty ? null : previous.first;
+  }
+
   Future<void> _syncAll() async {
     setState(() => _isBusy = true);
     try {
       var readings = await _localCacheService.loadReadings();
+      final unresolvedBlocked = <String, bool>{};
+      var syncedCount = 0;
+      var blockedCount = 0;
+      var carriedBlockedCount = 0;
 
       for (var index = 0; index < readings.length; index++) {
         final item = readings[index];
-        if (!item.isSynced) {
-          await _firestoreService.saveReading(
-            item.copyWith(estado: 'sincronizado'),
-          );
-          readings[index] = item.copyWith(estado: 'sincronizado');
+        if (item.isSynced) {
+          continue;
         }
+
+        if (item.isBlocked) {
+          final unresolved = await _isConflictStillPending(item);
+          unresolvedBlocked[item.id] = unresolved;
+          if (unresolved) {
+            carriedBlockedCount++;
+          }
+          continue;
+        }
+
+        final existing = await _firestoreService.fetchReadingById(item.id);
+        if (existing != null) {
+          final previous = await _firestoreService.fetchLatestPreviousReading(
+            meterCode: item.codigoContador,
+            currentPeriod: item.periodoActual,
+          );
+          final message =
+              'Ya existe una lectura sincronizada para este contador en el periodo ${item.periodoActual}. Quedo bloqueada hasta que un administrador defina el valor oficial.';
+          final conflictId = await _conflictService.registerConflict(
+            proposedReading: item,
+            existingReading: existing,
+            previousReading: previous,
+            motivo: 'lectura_existente',
+            mensaje: message,
+          );
+          readings[index] = item.copyWith(
+            estado: 'bloqueado',
+            conflictoId: conflictId,
+            detalleEstado: message,
+          );
+          unresolvedBlocked[item.id] = true;
+          blockedCount++;
+          continue;
+        }
+
+        final previous = await _firestoreService.fetchLatestPreviousReading(
+          meterCode: item.codigoContador,
+          currentPeriod: item.periodoActual,
+        );
+        if (previous != null && item.lecturaActual < previous.lecturaActual) {
+          final message =
+              'La lectura ${item.lecturaActual} es menor que la ultima lectura registrada (${previous.lecturaActual}). Quedo bloqueada para revision administrativa.';
+          final conflictId = await _conflictService.registerConflict(
+            proposedReading: item,
+            previousReading: previous,
+            motivo: 'lectura_menor',
+            mensaje: message,
+          );
+          readings[index] = item.copyWith(
+            estado: 'bloqueado',
+            conflictoId: conflictId,
+            detalleEstado: message,
+          );
+          unresolvedBlocked[item.id] = true;
+          blockedCount++;
+          continue;
+        }
+
+        await _firestoreService.saveReading(
+          item.copyWith(
+            estado: 'sincronizado',
+            conflictoId: null,
+            detalleEstado: null,
+          ),
+        );
+        readings[index] = item.copyWith(
+          estado: 'sincronizado',
+          conflictoId: null,
+          detalleEstado: null,
+        );
+        unresolvedBlocked[item.id] = false;
+        syncedCount++;
       }
 
       final activePeriod = await _periodService.fetchActivePeriod();
@@ -184,7 +282,11 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         final remoteReadings = await _firestoreService.fetchReadingsForPeriod(
           activePeriod.clave,
         );
-        readings = _mergeReadings(readings, remoteReadings);
+        readings = _mergeReadings(
+          local: readings,
+          remote: remoteReadings,
+          unresolvedBlocked: unresolvedBlocked,
+        );
         await _localCacheService.saveActivePeriod(activePeriod.clave);
       }
 
@@ -199,25 +301,46 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         _customers = customerCache;
         _readings = readings;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sincronización completada correctamente.'),
-        ),
-      );
+
+      if (blockedCount > 0 || carriedBlockedCount > 0) {
+        await _showInfoDialog(
+          title: 'Sincronizacion con conflictos',
+          message:
+              'Se sincronizaron $syncedCount lecturas. Nuevos bloqueos: $blockedCount. Bloqueos pendientes: $carriedBlockedCount. Un administrador debe resolverlos antes de que ese contador vuelva a quedar en estado satisfactorio.',
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              syncedCount == 0
+                  ? 'No habia lecturas pendientes por sincronizar.'
+                  : 'Sincronizacion completada. Lecturas subidas: $syncedCount.',
+            ),
+          ),
+        );
+      }
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No fue posible sincronizar: $error'),
-        ),
+      await _showInfoDialog(
+        title: 'No fue posible sincronizar',
+        message: '$error',
       );
     } finally {
       if (mounted) {
         setState(() => _isBusy = false);
       }
     }
+  }
+
+  Future<bool> _isConflictStillPending(ConsumptionReading reading) async {
+    final conflictId = reading.conflictoId;
+    if (conflictId == null || conflictId.isEmpty) {
+      return true;
+    }
+    final conflict = await _conflictService.fetchConflictById(conflictId);
+    return conflict == null || !conflict.isResolved;
   }
 
   List<ConsumptionCustomer> _buildCustomerCache(List<AppUser> users) {
@@ -237,16 +360,29 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     return items;
   }
 
-  List<ConsumptionReading> _mergeReadings(
-    List<ConsumptionReading> local,
-    List<ConsumptionReading> remote,
-  ) {
+  List<ConsumptionReading> _mergeReadings({
+    required List<ConsumptionReading> local,
+    required List<ConsumptionReading> remote,
+    required Map<String, bool> unresolvedBlocked,
+  }) {
     final merged = <String, ConsumptionReading>{};
     for (final item in local) {
       merged[item.id] = item;
     }
     for (final item in remote) {
-      merged[item.id] = item.copyWith(estado: 'sincronizado');
+      final localItem = merged[item.id];
+      final keepBlocked =
+          localItem != null &&
+          localItem.isBlocked &&
+          (unresolvedBlocked[item.id] ?? true);
+      if (keepBlocked) {
+        continue;
+      }
+      merged[item.id] = item.copyWith(
+        estado: 'sincronizado',
+        conflictoId: null,
+        detalleEstado: null,
+      );
     }
     final values = merged.values.toList()
       ..sort((a, b) => b.fecha.compareTo(a.fecha));
@@ -266,6 +402,10 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         customer: customer,
         period: period,
         currentUser: widget.currentUser,
+        previousReading: _previousReadingFor(
+          customer.codigoContador,
+          beforePeriod: period,
+        ),
       ),
     );
 
@@ -274,7 +414,12 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     }
 
     final readings = await _localCacheService.loadReadings();
-    final updated = _mergeReadings(readings, [reading]);
+    final updatedMap = <String, ConsumptionReading>{
+      for (final item in readings) item.id: item,
+    };
+    updatedMap[reading.id] = reading;
+    final updated = updatedMap.values.toList()
+      ..sort((a, b) => b.fecha.compareTo(a.fecha));
     await _localCacheService.saveReadings(updated);
     if (!mounted) {
       return;
@@ -286,6 +431,25 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       ),
     );
   }
+
+  Future<void> _showInfoDialog({
+    required String title,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Header extends StatelessWidget {
@@ -293,12 +457,14 @@ class _Header extends StatelessWidget {
     required this.activePeriod,
     required this.cachedClients,
     required this.pendingCount,
+    required this.blockedCount,
     required this.onSync,
   });
 
   final String? activePeriod;
   final int cachedClients;
   final int pendingCount;
+  final int blockedCount;
   final VoidCallback onSync;
 
   @override
@@ -315,12 +481,12 @@ class _Header extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Sincroniza el período vigente y la lista de clientes para capturar lecturas sin conexión y luego subirlas al sistema.',
+              'Sincroniza el periodo vigente y la lista de clientes para capturar lecturas sin conexion y luego subirlas al sistema.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 8),
             Text(
-              'Período vigente: ${activePeriod ?? 'Sin sincronizar'} · Clientes cacheados: $cachedClients · Pendientes: $pendingCount',
+              'Periodo vigente: ${activePeriod ?? 'Sin sincronizar'} - Clientes cacheados: $cachedClients - Pendientes: $pendingCount - Bloqueados: $blockedCount',
             ),
           ],
         );
@@ -377,12 +543,19 @@ class _ConsumptionCustomerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final blocked = reading?.isBlocked ?? false;
+    final statusColor = blocked
+        ? Colors.orange.shade800
+        : AppColors.textSecondary;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: blocked ? Colors.orange.shade200 : AppColors.border,
+        ),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -396,12 +569,12 @@ class _ConsumptionCustomerCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Código usuario: ${customer.codigoUsuario} · Contador: ${customer.codigoContador}',
+                'Codigo usuario: ${customer.codigoUsuario} - Contador: ${customer.codigoContador}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 6),
               Text(
-                'Período: ${activePeriod ?? 'Sin sincronizar'}',
+                'Periodo: ${activePeriod ?? 'Sin sincronizar'}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               if (reading != null) ...[
@@ -414,9 +587,20 @@ class _ConsumptionCustomerCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Estado: ${reading!.estado} · Operario: ${toDisplayUserName(reading!.nombreOperario)}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  'Estado: ${reading!.estado} - Operario: ${toDisplayUserName(reading!.nombreOperario)}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: statusColor,
+                  ),
                 ),
+                if ((reading!.detalleEstado ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    reading!.detalleEstado!,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: statusColor,
+                    ),
+                  ),
+                ],
               ],
             ],
           );
@@ -434,8 +618,14 @@ class _ConsumptionCustomerCard extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 44),
                   ),
-                  icon: const Icon(Icons.visibility_rounded),
-                  label: const Text('Lectura tomada'),
+                  icon: Icon(
+                    blocked
+                        ? Icons.lock_clock_rounded
+                        : Icons.visibility_rounded,
+                  ),
+                  label: Text(
+                    blocked ? 'Conflicto pendiente' : 'Lectura tomada',
+                  ),
                 );
 
           if (compact) {
@@ -467,11 +657,13 @@ class _ReadingDialog extends StatefulWidget {
     required this.customer,
     required this.period,
     required this.currentUser,
+    required this.previousReading,
   });
 
   final ConsumptionCustomer customer;
   final String period;
   final AppUser currentUser;
+  final ConsumptionReading? previousReading;
 
   @override
   State<_ReadingDialog> createState() => _ReadingDialogState();
@@ -505,15 +697,21 @@ class _ReadingDialogState extends State<_ReadingDialog> {
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 20),
-                  Text('Período: ${widget.period}'),
+                  Text('Periodo: ${widget.period}'),
                   const SizedBox(height: 8),
-                  Text('Código usuario: ${widget.customer.codigoUsuario}'),
+                  Text('Codigo usuario: ${widget.customer.codigoUsuario}'),
                   const SizedBox(height: 8),
-                  Text('Código contador: ${widget.customer.codigoContador}'),
+                  Text('Codigo contador: ${widget.customer.codigoContador}'),
                   const SizedBox(height: 8),
                   Text(
                     'Usuario: ${toDisplayUserName(widget.customer.nombreUsuario)}',
                   ),
+                  if (widget.previousReading != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Ultima lectura registrada: ${widget.previousReading!.lecturaActual} (${widget.previousReading!.periodoActual})',
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   TextFormField(
                     controller: _readingController,
@@ -527,8 +725,13 @@ class _ReadingDialogState extends State<_ReadingDialog> {
                       if (text.isEmpty) {
                         return 'Campo obligatorio.';
                       }
-                      if (int.tryParse(text) == null) {
-                        return 'Solo se permiten números.';
+                      final parsed = int.tryParse(text);
+                      if (parsed == null) {
+                        return 'Solo se permiten numeros.';
+                      }
+                      final previous = widget.previousReading;
+                      if (previous != null && parsed < previous.lecturaActual) {
+                        return 'La lectura no puede ser menor que ${previous.lecturaActual}.';
                       }
                       return null;
                     },

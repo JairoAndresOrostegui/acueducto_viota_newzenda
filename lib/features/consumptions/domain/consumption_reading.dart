@@ -12,6 +12,8 @@ class ConsumptionReading {
     required this.nombreOperario,
     required this.actorUid,
     required this.estado,
+    this.conflictoId,
+    this.detalleEstado,
   });
 
   final String id;
@@ -24,8 +26,11 @@ class ConsumptionReading {
   final String nombreOperario;
   final String actorUid;
   final String estado;
+  final String? conflictoId;
+  final String? detalleEstado;
 
   bool get isSynced => estado == 'sincronizado';
+  bool get isBlocked => estado == 'bloqueado';
 
   Map<String, dynamic> toMap() {
     return {
@@ -39,6 +44,8 @@ class ConsumptionReading {
       'nombreOperario': nombreOperario,
       'actorUid': actorUid,
       'estado': estado,
+      'conflictoId': conflictoId,
+      'detalleEstado': detalleEstado,
     };
   }
 
@@ -68,6 +75,8 @@ class ConsumptionReading {
       nombreOperario: data['nombreOperario'] as String? ?? '',
       actorUid: data['actorUid'] as String? ?? '',
       estado: data['estado'] as String? ?? 'pendiente',
+      conflictoId: data['conflictoId'] as String?,
+      detalleEstado: data['detalleEstado'] as String?,
     );
   }
 
@@ -87,24 +96,33 @@ class ConsumptionReading {
       nombreOperario: data['nombreOperario'] as String? ?? '',
       actorUid: data['actorUid'] as String? ?? '',
       estado: data['estado'] as String? ?? 'sincronizado',
+      conflictoId: data['conflictoId'] as String?,
+      detalleEstado: data['detalleEstado'] as String?,
     );
   }
 
   ConsumptionReading copyWith({
+    int? lecturaActual,
     String? estado,
     DateTime? fecha,
+    String? nombreOperario,
+    String? actorUid,
+    String? conflictoId,
+    String? detalleEstado,
   }) {
     return ConsumptionReading(
       id: id,
       codigoUsuario: codigoUsuario,
       codigoContador: codigoContador,
       nombreUsuario: nombreUsuario,
-      lecturaActual: lecturaActual,
+      lecturaActual: lecturaActual ?? this.lecturaActual,
       periodoActual: periodoActual,
       fecha: fecha ?? this.fecha,
-      nombreOperario: nombreOperario,
-      actorUid: actorUid,
+      nombreOperario: nombreOperario ?? this.nombreOperario,
+      actorUid: actorUid ?? this.actorUid,
       estado: estado ?? this.estado,
+      conflictoId: conflictoId ?? this.conflictoId,
+      detalleEstado: detalleEstado ?? this.detalleEstado,
     );
   }
 }

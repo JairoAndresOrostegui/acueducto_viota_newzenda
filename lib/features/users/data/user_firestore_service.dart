@@ -25,9 +25,14 @@ class UserFirestoreService {
   }
 
   Future<List<AppUser>> fetchActiveClients({int limit = 500}) async {
-    final users = await fetchUsers(limit: limit);
+    final snapshot = await _usersCollection
+        .where('rol', isEqualTo: 'cliente')
+        .where('estado', isEqualTo: 'activo')
+        .limit(limit)
+        .get();
+    final users = snapshot.docs.map(AppUser.fromFirestore).toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
     return users
-        .where((user) => user.rol == 'cliente' && user.estado == 'activo')
         .where((user) => user.codigoUsuario != 'na')
         .where((user) => user.numeroContador.isNotEmpty)
         .toList();

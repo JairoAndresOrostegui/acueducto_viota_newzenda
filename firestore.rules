@@ -21,9 +21,24 @@ service cloud.firestore {
           currentUserData().estado == 'activo';
     }
 
+    function isOperario() {
+      return signedIn() &&
+          exists(currentUserPath()) &&
+          currentUserData().rol == 'operario' &&
+          currentUserData().estado == 'activo';
+    }
+
+    function canManageConsumptions() {
+      return isAdmin() || isOperario();
+    }
+
     match /usuarios/{userId} {
       allow read: if signedIn() &&
-          (request.auth.uid == userId || isAdmin());
+          (request.auth.uid == userId ||
+              isAdmin() ||
+              (isOperario() &&
+                  resource.data.rol == 'cliente' &&
+                  resource.data.estado == 'activo'));
 
       allow create, update: if isAdmin() &&
           request.resource.data.uid == userId;
@@ -55,7 +70,8 @@ service cloud.firestore {
     }
 
     match /periodos/{periodoId} {
-      allow read, create, update: if isAdmin();
+      allow read: if canManageConsumptions();
+      allow create, update: if isAdmin();
       allow delete: if false;
     }
 
@@ -68,7 +84,15 @@ service cloud.firestore {
     }
 
     match /consumos/{consumoId} {
-      allow read, create, update: if isAdmin();
+      allow read, create, update: if canManageConsumptions();
+      allow delete: if false;
+    }
+
+    match /consumos_conflictos/{conflictoId} {
+      allow create: if canManageConsumptions();
+      allow read: if isAdmin() ||
+          (isOperario() && resource.data.actorUid == request.auth.uid);
+      allow update: if isAdmin();
       allow delete: if false;
     }
   }
