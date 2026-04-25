@@ -52,7 +52,7 @@ class _LoginFormState extends State<LoginForm> {
                     return 'Ingresa el usuario de acceso.';
                   }
                   if (!text.contains('@') || !text.contains('.')) {
-                    return 'Ingresa un correo valido.';
+                    return 'Ingresa un correo válido.';
                   }
                   return null;
                 },
@@ -104,7 +104,7 @@ class _LoginFormState extends State<LoginForm> {
                           widget.controller.setRememberSession(value ?? false);
                         },
                   title: const Text(
-                    'Mantener sesion activa en este equipo',
+                    'Mantener sesión activa en este equipo',
                     textAlign: TextAlign.center,
                   ),
                   controlAffinity: ListTileControlAffinity.leading,

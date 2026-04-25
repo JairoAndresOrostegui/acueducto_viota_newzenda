@@ -42,7 +42,7 @@ class FirebaseAuthService implements AuthService {
       throw AuthException(_mapError(error));
     } catch (_) {
       throw const AuthException(
-        'No fue posible iniciar sesion en este momento. Intenta de nuevo.',
+        'No fue posible iniciar sesión en este momento. Intenta de nuevo.',
       );
     }
   }
@@ -67,7 +67,7 @@ class FirebaseAuthService implements AuthService {
   String _mapError(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
-        return 'El correo no tiene un formato valido.';
+        return 'El correo no tiene un formato válido.';
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':
@@ -77,11 +77,11 @@ class FirebaseAuthService implements AuthService {
       case 'too-many-requests':
         return 'Demasiados intentos. Espera un momento antes de reintentar.';
       case 'network-request-failed':
-        return 'No hay conexion con Firebase. Revisa la red e intenta de nuevo.';
+        return 'No hay conexión con Firebase. Revisa la red e intenta de nuevo.';
       case 'operation-not-allowed':
-        return 'El proveedor de acceso no esta habilitado en Firebase Authentication.';
+        return 'El proveedor de acceso no está habilitado en Firebase Authentication.';
       default:
-        return 'No fue posible iniciar sesion. Codigo: ${error.code}.';
+        return 'No fue posible iniciar sesión. Código: ${error.code}.';
     }
   }
 }

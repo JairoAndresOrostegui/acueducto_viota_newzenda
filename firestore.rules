@@ -28,17 +28,45 @@ service cloud.firestore {
           currentUserData().estado == 'activo';
     }
 
+    function isContador() {
+      return signedIn() &&
+          exists(currentUserPath()) &&
+          currentUserData().rol == 'contador' &&
+          currentUserData().estado == 'activo';
+    }
+
+    function isActiveClientDoc() {
+      return resource.data.rol == 'cliente' &&
+          resource.data.estado == 'activo';
+    }
+
     function canManageConsumptions() {
       return isAdmin() || isOperador();
+    }
+
+    function canViewConsumptionReports() {
+      return isAdmin() || isContador();
+    }
+
+    function isOwnClientCode(code) {
+      return signedIn() &&
+          exists(currentUserPath()) &&
+          currentUserData().rol == 'cliente' &&
+          currentUserData().estado == 'activo' &&
+          currentUserData().codigoUsuario == code;
+    }
+
+    function isPaymentStatusUpdate() {
+      return isAdmin() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['pagado', 'estado', 'reciboId']);
     }
 
     match /usuarios/{userId} {
       allow read: if signedIn() &&
           (request.auth.uid == userId ||
               isAdmin() ||
-              (isOperador() &&
-                  resource.data.rol == 'cliente' &&
-                  resource.data.estado == 'activo'));
+              (isOperador() && isActiveClientDoc()));
 
       allow create, update: if isAdmin() &&
           request.resource.data.uid == userId;
@@ -70,22 +98,56 @@ service cloud.firestore {
     }
 
     match /periodos/{periodoId} {
-      allow read: if canManageConsumptions();
+      allow read: if canManageConsumptions() || canViewConsumptionReports();
       allow create, update: if isAdmin();
       allow delete: if false;
+
+      match /consumos/{consumoId} {
+        allow read: if canManageConsumptions() || canViewConsumptionReports();
+        allow create: if canManageConsumptions();
+        allow update: if canManageConsumptions() &&
+            (!(resource.data.facturado == true || resource.data.pagado == true) ||
+                isPaymentStatusUpdate());
+        allow delete: if false;
+
+        match /historial/{historialId} {
+          allow read: if isAdmin();
+          allow create, update: if canManageConsumptions();
+          allow delete: if false;
+        }
+      }
+
+      match /recibos/{reciboId} {
+        allow read: if isAdmin() ||
+            isContador() ||
+            isOwnClientCode(resource.data.codigoUsuario);
+        allow create, update: if isAdmin();
+        allow delete: if false;
+      }
+    }
+
+    match /{path=**}/recibos/{reciboId} {
+      allow read: if isAdmin() ||
+          isContador() ||
+          isOwnClientCode(resource.data.codigoUsuario);
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/consumos/{consumoId} {
+      allow read: if canManageConsumptions() || canViewConsumptionReports();
+      allow create, update, delete: if false;
     }
 
     match /medios_pago/{medioPagoId} {
       allow read, create, update, delete: if isAdmin();
     }
 
-    match /valores_facturacion/{valorId} {
+    match /facturacion_observaciones/{observacionId} {
       allow read, create, update, delete: if isAdmin();
     }
 
-    match /consumos/{consumoId} {
-      allow read, create, update: if canManageConsumptions();
-      allow delete: if false;
+    match /valores_facturacion/{valorId} {
+      allow read, create, update, delete: if isAdmin();
     }
 
     match /consumos_conflictos/{conflictoId} {

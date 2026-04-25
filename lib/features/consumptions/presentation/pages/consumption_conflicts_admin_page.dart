@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,6 +8,7 @@ import '../../../../theme/app_colors.dart';
 import '../../data/consumption_conflict_firestore_service.dart';
 import '../../data/consumption_firestore_service.dart';
 import '../../domain/consumption_conflict.dart';
+import '../../domain/consumption_history_entry.dart';
 import '../../domain/consumption_reading.dart';
 import '../../../users/domain/app_user.dart';
 
@@ -51,17 +54,12 @@ class _ConsumptionConflictsAdminPageState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ConflictsHeader(
-                pendingCount: _items.length,
-                onRefresh: _load,
-              ),
+              _ConflictsHeader(pendingCount: _items.length, onRefresh: _load),
               const SizedBox(height: 20),
               Expanded(
                 child: _items.isEmpty
                     ? const Center(
-                        child: Text(
-                          'No hay conflictos pendientes en consumos.',
-                        ),
+                        child: Text('No hay conflictos pendientes en consumos.'),
                       )
                     : ListView.separated(
                         itemCount: _items.length,
@@ -105,10 +103,21 @@ class _ConsumptionConflictsAdminPageState
   }
 
   Future<void> _resolve(ConsumptionConflict conflict) async {
+    final lockedReading = conflict.lecturaExistente ?? conflict.lecturaFinal;
+    if (lockedReading?.pagado == true || lockedReading?.facturado == true) {
+      await _showError(
+        'Este consumo ya está facturado o pagado y no puede modificarse.',
+      );
+      return;
+    }
+
     final result = await showDialog<_ConflictResolutionResult>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _ResolveConflictDialog(conflict: conflict),
+      builder: (context) => _ResolveConflictDialog(
+        conflict: conflict,
+        currentUser: widget.currentUser,
+      ),
     );
     if (result == null) {
       return;
@@ -116,7 +125,27 @@ class _ConsumptionConflictsAdminPageState
 
     setState(() => _isBusy = true);
     try {
-      await _firestoreService.saveReading(result.finalReading);
+      await _firestoreService.updateReadingWithCascade(
+        updatedReading: result.finalReading,
+        updateEntry: ConsumptionHistoryEntry(
+          id: '${DateTime.now().microsecondsSinceEpoch}',
+          tipoEvento: 'conflicto_resuelto',
+          actorUid: widget.currentUser.uid,
+          actorNombre: widget.currentUser.nombre,
+          actorRol: widget.currentUser.rol,
+          fecha: DateTime.now(),
+          estadoAnterior:
+              conflict.lecturaExistente?.estado ?? conflict.lecturaPropuesta.estado,
+          estadoNuevo: result.finalReading.estado,
+          valorAnterior: conflict.lecturaExistente?.lecturaActual,
+          valorNuevo: result.finalReading.lecturaActual,
+          motivo: result.warningMessage,
+          observaciones: result.adminObservation,
+        ),
+        actorUid: widget.currentUser.uid,
+        actorName: widget.currentUser.nombre,
+        actorRole: widget.currentUser.rol,
+      );
       await _conflictService.resolveConflict(
         conflict: conflict,
         finalReading: result.finalReading,
@@ -127,33 +156,38 @@ class _ConsumptionConflictsAdminPageState
         return;
       }
       await _load();
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Conflicto resuelto correctamente.'),
-        ),
+        const SnackBar(content: Text('Conflicto resuelto correctamente.')),
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('No fue posible resolver el conflicto'),
-          content: Text('$error'),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Entendido'),
-            ),
-          ],
-        ),
-      );
+      await _showError('$error');
     } finally {
       if (mounted) {
         setState(() => _isBusy = false);
       }
     }
+  }
+
+  Future<void> _showError(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('No fue posible resolver el conflicto'),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -168,59 +202,34 @@ class _ConflictsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        final info = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Conflictos de consumos',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Aqui el administrador decide cual lectura queda oficial cuando hay doble captura o una lectura menor a la anterior.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 8),
-            Text('Pendientes: $pendingCount'),
-          ],
-        );
-
-        if (compact) {
-          return Column(
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              info,
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: onRefresh,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                ),
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Actualizar'),
+              Text(
+                'Conflictos de consumos',
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
+              const SizedBox(height: 8),
+              Text(
+                'El administrador define la lectura oficial. Si el consumo ya fue facturado o pagado no se permite modificar.',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 8),
+              Text('Pendientes: $pendingCount'),
             ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(child: info),
-            const SizedBox(width: 16),
-            ElevatedButton.icon(
-              onPressed: onRefresh,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(0, 48),
-              ),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Actualizar'),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+        const SizedBox(width: 16),
+        ElevatedButton.icon(
+          onPressed: onRefresh,
+          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Actualizar'),
+        ),
+      ],
     );
   }
 }
@@ -236,6 +245,7 @@ class _ConflictCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final existing = item.lecturaExistente;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -243,80 +253,55 @@ class _ConflictCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.orange.shade200),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 760;
-          final info = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                toDisplayUserName(item.lecturaPropuesta.nombreUsuario),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Codigo usuario: ${item.lecturaPropuesta.codigoUsuario} - Contador: ${item.lecturaPropuesta.codigoContador}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Periodo: ${item.lecturaPropuesta.periodoActual} - Motivo: ${_motivoLabel(item.motivo)}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Propuesta: ${item.lecturaPropuesta.lecturaActual} - Operario: ${toDisplayUserName(item.lecturaPropuesta.nombreOperario)}',
-              ),
-              if (item.lecturaExistente != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Actual en sistema: ${item.lecturaExistente!.lecturaActual} - Operario: ${toDisplayUserName(item.lecturaExistente!.nombreOperario)}',
-                ),
-              ],
-              if (item.lecturaAnterior != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Ultima lectura anterior: ${item.lecturaAnterior!.lecturaActual} (${item.lecturaAnterior!.periodoActual})',
-                ),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                item.mensaje,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.orange.shade900,
-                ),
-              ),
-            ],
-          );
-
-          final action = ElevatedButton.icon(
-            onPressed: onResolve,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(0, 44),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            toDisplayUserName(item.lecturaPropuesta.nombreUsuario),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Código usuario: ${item.lecturaPropuesta.codigoUsuario} - Contador: ${item.lecturaPropuesta.codigoContador}',
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Período: ${item.lecturaPropuesta.periodoActual} - Motivo: ${_motivoLabel(item.motivo)}',
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Propuesta: ${item.lecturaPropuesta.lecturaActual} - Operario: ${toDisplayUserName(item.lecturaPropuesta.nombreOperario)}',
+          ),
+          if (existing != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Actual en sistema: ${existing.lecturaActual} - Facturado: ${existing.facturado ? 'sí' : 'no'} - Pagado: ${existing.pagado ? 'sí' : 'no'}',
             ),
-            icon: const Icon(Icons.rule_folder_rounded),
-            label: const Text('Resolver'),
-          );
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                info,
-                const SizedBox(height: 16),
-                action,
-              ],
-            );
-          }
-
-          return Row(
-            children: [
-              Expanded(child: info),
-              const SizedBox(width: 12),
-              action,
-            ],
-          );
-        },
+          ],
+          if (item.lecturaAnterior != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Última lectura anterior: ${item.lecturaAnterior!.lecturaActual} (${item.lecturaAnterior!.periodoActual})',
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            item.mensaje,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.orange.shade900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: onResolve,
+              style: ElevatedButton.styleFrom(minimumSize: const Size(0, 44)),
+              icon: const Icon(Icons.rule_folder_rounded),
+              label: const Text('Resolver'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -336,9 +321,11 @@ class _ConflictCard extends StatelessWidget {
 class _ResolveConflictDialog extends StatefulWidget {
   const _ResolveConflictDialog({
     required this.conflict,
+    required this.currentUser,
   });
 
   final ConsumptionConflict conflict;
+  final AppUser currentUser;
 
   @override
   State<_ResolveConflictDialog> createState() => _ResolveConflictDialogState();
@@ -347,6 +334,8 @@ class _ResolveConflictDialog extends StatefulWidget {
 class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _manualValueController = TextEditingController();
+  final TextEditingController _observationController = TextEditingController();
+
   String _selection = 'propuesta';
 
   @override
@@ -360,11 +349,13 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
   @override
   void dispose() {
     _manualValueController.dispose();
+    _observationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isFacturado = widget.conflict.lecturaExistente?.facturado ?? false;
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
@@ -411,29 +402,53 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
                     TextFormField(
                       controller: _manualValueController,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'Valor final',
-                      ),
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Valor final'),
                       validator: (value) {
                         if (_selection != 'manual') {
                           return null;
                         }
                         final parsed = int.tryParse(value?.trim() ?? '');
                         if (parsed == null) {
-                          return 'Ingresa un valor valido.';
+                          return 'Ingresa un valor válido.';
                         }
                         final previous = widget.conflict.lecturaAnterior;
-                        if (previous != null &&
-                            parsed < previous.lecturaActual) {
+                        if (previous != null && parsed < previous.lecturaActual) {
                           return 'No puede ser menor que ${previous.lecturaActual}.';
                         }
                         return null;
                       },
                     ),
                   ],
+                  if (isFacturado) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDF1DA),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Text(
+                        'Advertencia: este consumo ya fue facturado. Si cambias el valor, deberías comunicarte con la persona porque el sistema registrará la novedad.',
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _observationController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Observación administrativa',
+                    ),
+                    validator: (value) {
+                      if (isFacturado && (value?.trim().isEmpty ?? true)) {
+                        return 'Agrega una observación administrativa.';
+                      }
+                      return null;
+                    },
+                  ),
                   const SizedBox(height: 24),
                   Wrap(
                     alignment: WrapAlignment.end,
@@ -449,7 +464,7 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(0, 48),
                         ),
-                        child: const Text('Guardar decision'),
+                        child: const Text('Guardar decisión'),
                       ),
                     ],
                   ),
@@ -463,17 +478,15 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
   }
 
   void _updateSelection(String? value) {
-    if (value == null) {
-      return;
+    if (value != null) {
+      setState(() => _selection = value);
     }
-    setState(() => _selection = value);
   }
 
   void _submit() {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
     final finalReading = _buildFinalReading();
     if (finalReading == null) {
       return;
@@ -489,11 +502,19 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
       );
       return;
     }
-
-    Navigator.of(context).pop(_ConflictResolutionResult(finalReading));
+    Navigator.of(context).pop(
+      _ConflictResolutionResult(
+        finalReading,
+        _observationController.text.trim(),
+        (widget.conflict.lecturaExistente?.facturado ?? false)
+            ? 'Consumo facturado: requiere comunicacion con el usuario.'
+            : 'Conflicto resuelto por administrador.',
+      ),
+    );
   }
 
   ConsumptionReading? _buildFinalReading() {
+    final previousValue = widget.conflict.lecturaAnterior?.lecturaActual;
     switch (_selection) {
       case 'existente':
         final existing = widget.conflict.lecturaExistente;
@@ -501,27 +522,50 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
           return null;
         }
         return existing.copyWith(
-          estado: 'sincronizado',
+          lecturaAnterior: previousValue,
+          consumoCalculado:
+              previousValue == null ? null : existing.lecturaActual - previousValue,
+          estado: 'editado_admin',
           conflictoId: null,
           detalleEstado: null,
+          observacionesAdmin: _observationController.text.trim().isEmpty
+              ? null
+              : _observationController.text.trim(),
+          nombreOperario: widget.currentUser.nombre,
+          actorUid: widget.currentUser.uid,
         );
       case 'manual':
         final value = int.parse(_manualValueController.text.trim());
         return widget.conflict.lecturaPropuesta.copyWith(
           lecturaActual: value,
+          lecturaAnterior: previousValue,
+          consumoCalculado: previousValue == null ? null : value - previousValue,
           fecha: DateTime.now(),
-          nombreOperario: widget.conflict.lecturaPropuesta.nombreOperario,
-          actorUid: widget.conflict.lecturaPropuesta.actorUid,
-          estado: 'sincronizado',
+          nombreOperario: widget.currentUser.nombre,
+          actorUid: widget.currentUser.uid,
+          estado: 'editado_admin',
           conflictoId: null,
           detalleEstado: null,
+          observacionesAdmin: _observationController.text.trim().isEmpty
+              ? null
+              : _observationController.text.trim(),
         );
       case 'propuesta':
       default:
         return widget.conflict.lecturaPropuesta.copyWith(
-          estado: 'sincronizado',
+          lecturaAnterior: previousValue,
+          consumoCalculado: previousValue == null
+              ? null
+              : widget.conflict.lecturaPropuesta.lecturaActual - previousValue,
+          fecha: DateTime.now(),
+          nombreOperario: widget.currentUser.nombre,
+          actorUid: widget.currentUser.uid,
+          estado: 'editado_admin',
           conflictoId: null,
           detalleEstado: null,
+          observacionesAdmin: _observationController.text.trim().isEmpty
+              ? null
+              : _observationController.text.trim(),
         );
     }
   }
@@ -546,6 +590,7 @@ class _ResolutionOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Opacity(
       opacity: enabled ? 1 : 0.45,
+      // TODO: migrate to RadioGroup once the surrounding dialog is refactored.
       child: RadioListTile<String>(
         value: value,
         groupValue: groupValue,
@@ -558,7 +603,13 @@ class _ResolutionOptionTile extends StatelessWidget {
 }
 
 class _ConflictResolutionResult {
-  const _ConflictResolutionResult(this.finalReading);
+  const _ConflictResolutionResult(
+    this.finalReading,
+    this.adminObservation,
+    this.warningMessage,
+  );
 
   final ConsumptionReading finalReading;
+  final String adminObservation;
+  final String warningMessage;
 }

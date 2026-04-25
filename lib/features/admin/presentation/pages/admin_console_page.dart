@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:frontacueductonewzenda/features/billing/invoices/presentation/pages/billing_invoices_page.dart';
+import 'package:frontacueductonewzenda/features/billing/observations/presentation/pages/billing_observations_admin_page.dart';
 import 'package:frontacueductonewzenda/features/billing/payment_methods/presentation/pages/payment_methods_admin_page.dart';
 import 'package:frontacueductonewzenda/features/billing/periods/presentation/pages/billing_periods_page.dart';
 import 'package:frontacueductonewzenda/features/billing/values/presentation/pages/billing_values_admin_page.dart';
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_conflicts_admin_page.dart';
+import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_payments_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
+import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_reports_admin_page.dart';
 
 import '../../../../theme/app_colors.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
@@ -14,7 +18,6 @@ import '../../../users/data/user_firestore_service.dart';
 import '../../../users/domain/app_user.dart';
 import '../../../users/presentation/pages/user_logs_page.dart';
 import '../../../users/presentation/pages/users_admin_page.dart';
-import '../widgets/admin_placeholder_page.dart';
 
 class AdminConsolePage extends StatefulWidget {
   const AdminConsolePage({
@@ -63,7 +66,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
               tabs: const [
                 Tab(text: 'Usuarios'),
                 Tab(text: 'Consumos'),
-                Tab(text: 'Facturacion'),
+                Tab(text: 'Facturación'),
               ],
             ),
           ),
@@ -91,7 +94,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     CatalogAdminPage(
                       title: 'Tipos de documento',
                       description:
-                          'Catalogo usado por el formulario de usuarios. Solo se muestran activos fuera de este modulo.',
+                          'Catálogo usado por el formulario de usuarios. Solo se muestran activos fuera de este módulo.',
                       itemName: 'tipo de documento',
                       valueLabel: 'Valor BD',
                       nameLabel: 'Nombre visible',
@@ -102,7 +105,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     CatalogAdminPage(
                       title: 'Roles',
                       description:
-                          'Catalogo de perfiles permitidos para usuarios administrables.',
+                          'Catálogo de perfiles permitidos para usuarios administrables.',
                       itemName: 'rol',
                       valueLabel: 'Valor BD',
                       nameLabel: 'Nombre visible',
@@ -125,9 +128,10 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                   ],
                 ),
                 _AdminGroupSection(
-                  tabs: [
+                  tabs: const [
                     Tab(text: 'Conflictos'),
                     Tab(text: 'Registrar consumos'),
+                    Tab(text: 'Reportes'),
                     Tab(text: 'Registrar pagos'),
                   ],
                   children: [
@@ -137,23 +141,23 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     ConsumptionRegisterPage(
                       currentUser: widget.currentUser,
                     ),
-                    AdminPlaceholderPage(
-                      message:
-                          'Aqui va el registro de pagos de los consumos',
-                    ),
+                    const ConsumptionReportsAdminPage(),
+                    const ConsumptionPaymentsPage(),
                   ],
                 ),
                 _AdminGroupSection(
-                  tabs: [
-                    Tab(text: 'Facturacion'),
-                    Tab(text: 'Periodos'),
+                  tabs: const [
+                    Tab(text: 'Facturación'),
+                    Tab(text: 'Períodos'),
                     Tab(text: 'Medios de pago'),
+                    Tab(text: 'Observaciones'),
                     Tab(text: 'Valores'),
                   ],
                   children: [
-                    AdminPlaceholderPage(message: 'Aqui va facturacion'),
+                    BillingInvoicesPage(currentUser: widget.currentUser),
                     BillingPeriodsPage(),
                     PaymentMethodsAdminPage(),
+                    BillingObservationsAdminPage(),
                     BillingValuesAdminPage(currentUser: widget.currentUser),
                   ],
                 ),

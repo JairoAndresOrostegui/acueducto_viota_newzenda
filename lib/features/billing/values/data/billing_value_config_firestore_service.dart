@@ -29,6 +29,20 @@ class BillingValueConfigFirestoreService {
         });
   }
 
+  Future<BillingValueConfig?> fetchActiveItem() async {
+    final snapshot = await _collection
+        .orderBy('fechaCreacion', descending: true)
+        .limit(50)
+        .get();
+    for (final doc in snapshot.docs) {
+      final item = BillingValueConfig.fromFirestore(doc);
+      if (item.isActive) {
+        return item;
+      }
+    }
+    return null;
+  }
+
   Future<void> saveNewVersion({
     required BillingValueConfig item,
     BillingValueConfig? previousActive,

@@ -64,7 +64,7 @@ class AuthController extends ChangeNotifier {
       return false;
     } catch (_) {
       _errorMessage =
-          'No fue posible iniciar sesion en este momento. Intenta de nuevo.';
+          'No fue posible iniciar sesión en este momento. Intenta de nuevo.';
       _isAuthenticated = false;
       return false;
     } finally {

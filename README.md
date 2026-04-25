@@ -1,24 +1,146 @@
-# Acueducto Viotá Newzenda
+# Acueducto Viota Newzenda
 
-Aplicacion Flutter para el sistema del acueducto veredal de Quitasol y Jazmin, municipio de Viotá, Cundinamarca.
+Aplicacion Flutter para la operacion del acueducto veredal de Quitasol y Jazmin, municipio de Viota, Cundinamarca.
 
-## Estado actual
+## Resumen
 
-- Soporte objetivo: Android y Web.
-- Login responsivo con autenticacion real en Firebase.
-- Panel administrativo con CRUD de usuarios, tipos de documento, roles y sectores.
-- Auditoria visual de ediciones y eliminaciones de usuarios.
-- Tema global consistente con la identidad del proyecto.
+- Plataformas objetivo: `Android` y `Web`
+- Autenticacion: `Firebase Authentication`
+- Datos: `Cloud Firestore`
+- Backend administrativo: `Cloud Functions`
+- PDF de recibos: `pdf` y `printing`
+- Cache operativa del operador: `SharedPreferences`
 
-## Estructura base
+## Estado actual del software
 
-- `lib/app`: configuracion principal de la app.
-- `lib/theme`: paleta y tema global.
-- `lib/features/auth`: login y autenticacion con Firebase.
-- `lib/features/admin`: consola administrativa principal.
-- `lib/features/catalogs`: CRUDs de catalogos.
-- `lib/features/users`: CRUD de usuarios y logs de auditoria.
-- `functions/`: Cloud Functions para crear, editar y eliminar usuarios administrados.
+El sistema ya cubre el flujo principal de operacion:
+
+- login y persistencia de sesion
+- panel por rol
+- administracion de usuarios y catalogos
+- registro local y sincronizacion de consumos
+- deteccion y resolucion de conflictos
+- reportes de consumos con exportacion CSV
+- facturacion masiva e individual
+- regeneracion de recibos no pagados
+- gestion de medios de pago
+- gestion de observaciones de facturacion
+- registro y reversa de pagos
+- consulta de recibo por cliente
+- acceso del contador a reportes de consumos y cartera pendiente
+
+## Roles implementados
+
+- `administrador`
+  - consola completa con `Usuarios`, `Consumos` y `Facturacion`
+- `operador`
+  - acceso directo a `Registrar consumos`
+- `cliente`
+  - acceso directo a su recibo pendiente mas reciente
+- `contador`
+  - acceso restringido a `Consumos > Reportes`, incluyendo informe de cartera pendiente
+
+## Modulos principales
+
+### Usuarios
+
+Capacidades:
+
+- CRUD de usuarios administrados
+- catalogos de tipos de documento, roles y sectores
+- auditoria de cambios y eliminaciones
+- validaciones especiales para usuarios cliente
+
+Colecciones:
+
+- `usuarios`
+- `usuarios_logs`
+- `tipos_documento`
+- `roles`
+- `sectores`
+
+### Consumos
+
+Capacidades:
+
+- descarga del periodo de trabajo al dispositivo del operador
+- registro local de lecturas
+- soporte de irregularidades
+- sincronizacion a Firestore
+- deteccion de conflictos
+- resolucion administrativa con recálculo posterior
+- reportes filtrados
+- exportacion CSV
+- registro y reversa de pagos
+
+Colecciones:
+
+- `periodos/{periodo}/consumos`
+- `periodos/{periodo}/consumos/{contador}/historial`
+- `consumos_conflictos`
+
+### Facturacion
+
+Capacidades:
+
+- creacion y activacion de periodos
+- configuracion versionada de valores
+- medios de pago
+- observaciones de facturacion masivas e individuales
+- generacion de recibos masiva e individual
+- exportacion PDF por periodo y por sector
+- generacion de un solo PDF o PDFs individuales
+- regeneracion de recibos no pagados
+- aviso dentro del recibo si cambian valores de facturacion
+- PDF institucional ajustado al formato solicitado
+
+Colecciones:
+
+- `periodos`
+- `periodos/{periodo}/recibos`
+- `medios_pago`
+- `valores_facturacion`
+- `facturacion_observaciones`
+
+## Reglas funcionales importantes
+
+- La app requiere perfil en `usuarios/{uid}` para todo usuario autenticado.
+- Solo usuarios con `estado = activo` pueden entrar.
+- El operador trabaja sobre un periodo descargado localmente.
+- No se puede descargar otro periodo si hay lecturas locales pendientes.
+- Los conflictos se guardan en `consumos_conflictos`.
+- Un consumo `facturado` o `pagado` no se edita desde el flujo normal.
+- Los recibos se generan solo para lecturas facturables y no bloqueadas.
+- La fecha de vencimiento del recibo es el dia `24` del mes de generacion del recibo.
+- Si el recibo se genera despues del dia `20`, vence `15` dias despues de la fecha generada.
+- La regeneracion no modifica recibos ya pagados.
+- El cliente solo ve su recibo pendiente mas reciente.
+- El contador solo puede consultar reportes y cartera pendiente.
+
+## Firebase desplegado en esta iteracion
+
+Ya quedaron desplegados en `frontacueductonewzenda`:
+
+- reglas de Firestore
+- indices de Firestore
+
+Cambios desplegados relevantes:
+
+- permisos para `facturacion_observaciones`
+- permisos de lectura para `contador` en `periodos`, `consumos` y `recibos`
+- indice compuesto para `collectionGroup('recibos')` por `codigoUsuario` y `pagado`
+
+## Estructura principal
+
+- `lib/features/auth`
+- `lib/features/home`
+- `lib/features/admin`
+- `lib/features/users`
+- `lib/features/catalogs`
+- `lib/features/consumptions`
+- `lib/features/billing`
+- `functions`
+- `documentacion de entrega`
 
 ## Comandos utiles
 
@@ -27,25 +149,32 @@ flutter pub get
 flutter analyze
 flutter test
 flutter run
-firebase deploy --only functions --project frontacueductonewzenda
 firebase deploy --only firestore --project frontacueductonewzenda
+firebase deploy --only functions --project frontacueductonewzenda
+firebase deploy --only hosting --project frontacueductonewzenda
 ```
 
-## Firebase
+## Estado de cierre
 
-- Proyecto: `frontacueductonewzenda`
-- Plataformas configuradas: Android y Web
-- Archivo generado: `lib/firebase_options.dart`
-- Colecciones base:
-  - `usuarios`
-  - `usuarios_logs`
-  - `tipos_documento`
-  - `roles`
-  - `sectores`
+Para el alcance funcional actual, el software quedo operativo.
 
-## Reglas de datos
+Todavia hay pendientes razonables antes de llamarlo cerrado al 100% a nivel de producto:
 
-- La base de datos guarda en minuscula `nombre`, `correo`, `rol`, `estado`, `sector` y `tipoDocumento`.
-- La UI capitaliza esos valores solo al mostrarlos.
-- Los catalogos de tipos de documento y roles se inicializan automaticamente si estan vacios.
-- Los sectores se administran desde su propio CRUD y solo se ofrecen activos en usuarios cuando el rol es `cliente`.
+- pruebas funcionales finales por rol en ambiente real
+- validacion operativa con datos reales de facturacion y pago
+- despliegue de hosting si se quiere dejar la version web publicada
+- endurecer pruebas automatizadas, porque hoy el proyecto depende sobre todo de validacion manual
+
+Si el alcance esperado era:
+
+- usuarios
+- consumos
+- conflictos
+- reportes
+- pagos
+- facturacion
+- PDF
+- cliente
+- contador con reportes y cartera
+
+entonces el software quedo esencialmente completo.

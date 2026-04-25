@@ -21,6 +21,14 @@ class PaymentMethodFirestoreService {
         .map((snapshot) => snapshot.docs.map(PaymentMethod.fromFirestore).toList());
   }
 
+  Future<List<PaymentMethod>> fetchItems({int limit = 200}) async {
+    final snapshot = await _collection
+        .orderBy('fechaCreacion', descending: true)
+        .limit(limit)
+        .get();
+    return snapshot.docs.map(PaymentMethod.fromFirestore).toList();
+  }
+
   Future<void> saveItem(PaymentMethod item) {
     return _collection.doc(item.id).set(item.toFirestore(), SetOptions(merge: true));
   }

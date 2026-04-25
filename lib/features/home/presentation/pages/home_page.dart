@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../../core/presentation/text_formatters.dart';
 import '../../../../theme/app_colors.dart';
 import '../../../admin/presentation/pages/admin_console_page.dart';
+import '../../../billing/invoices/presentation/pages/client_invoice_page.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
 import '../../../consumptions/presentation/pages/consumption_register_page.dart';
+import '../../../consumptions/presentation/pages/consumption_reports_admin_page.dart';
 import '../../../users/data/user_admin_functions_service.dart';
 import '../../../users/data/user_audit_log_service.dart';
 import '../../../users/data/user_firestore_service.dart';
@@ -104,14 +106,12 @@ class HomePage extends StatelessWidget {
           userService: userService,
         );
       case 'cliente':
-        return const _SingleModuleShell(
-          title: 'Facturación',
-          message: 'Aquí irá el módulo de facturación para clientes.',
-        );
+        return ClientInvoicePage(currentUser: currentUser);
       case 'contador':
         return const _SingleModuleShell(
-          title: 'Reportes',
-          message: 'Aquí irá el módulo de reportes para contador.',
+          title: 'Consumos',
+          message: 'Módulo disponible: Reportes',
+          child: ConsumptionReportsAdminPage(),
         );
       default:
         return _NoAccessView(
@@ -214,10 +214,12 @@ class _SingleModuleShell extends StatelessWidget {
   const _SingleModuleShell({
     required this.title,
     required this.message,
+    required this.child,
   });
 
   final String title;
   final String message;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -228,19 +230,18 @@ class _SingleModuleShell extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: const Color(0xFFE0ECE8)),
       ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 20),
+          Expanded(child: child),
+        ],
       ),
     );
   }

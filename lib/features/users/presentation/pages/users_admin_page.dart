@@ -424,14 +424,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
                             width: width,
                             child: _text(
                               _numeroDocumentoController,
-                              'Numero documento',
+                              'Número documento',
                             ),
                           ),
                           _FieldBox(
                             width: width,
                             child: _text(
                               _numeroContactoController,
-                              'Numero contacto',
+                              'Número contacto',
                             ),
                           ),
                           _FieldBox(width: width, child: _selectRole()),
@@ -445,7 +445,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                             width: width,
                             child: _text(
                               _codigoUsuarioController,
-                              'Codigo usuario',
+                              'Código usuario',
                               enabled: _isClient,
                               validator: _isClient ? _numericRequired : null,
                               keyboardType: TextInputType.number,
@@ -456,7 +456,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                             width: width,
                             child: _text(
                               _numeroContadorController,
-                              'Codigos contador',
+                              'Códigos contador',
                               enabled: _isClient,
                               validator:
                                   _isClient ? _meterNumbersValidator : null,
@@ -738,7 +738,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       return base;
     }
     if (!RegExp(r'^\d+$').hasMatch(value!.trim())) {
-      return 'Solo se permiten numeros.';
+      return 'Solo se permiten números.';
     }
     return null;
   }
@@ -768,7 +768,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     }
     final text = value!.trim();
     if (!text.contains('@') || !text.contains('.')) {
-      return 'Correo invalido.';
+      return 'Correo inválido.';
     }
     return null;
   }
@@ -911,7 +911,7 @@ class _Header extends StatelessWidget {
             Text('Usuarios', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 8),
             Text(
-              'CRUD administrativo con limite inicial de 200 registros para mantener la consulta controlada.',
+              'CRUD administrativo con límite inicial de 200 registros para mantener la consulta controlada.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
           ],
@@ -1097,7 +1097,7 @@ class _UserCard extends StatelessWidget {
                         : toDisplayText(user.tipoCliente),
                   ),
                   _InfoChip(
-                    label: 'Codigo',
+                    label: 'Código',
                     value: user.codigoUsuario == 'na'
                         ? 'NA'
                         : user.codigoUsuario,

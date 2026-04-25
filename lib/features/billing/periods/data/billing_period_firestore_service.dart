@@ -15,16 +15,13 @@ class BillingPeriodFirestoreService {
 
   Stream<List<BillingPeriod>> watchPeriods() {
     return _collection.snapshots().map((snapshot) {
-      final items = snapshot.docs.map(BillingPeriod.fromFirestore).toList();
-      items.sort((a, b) {
-        final yearCompare = b.ano.compareTo(a.ano);
-        if (yearCompare != 0) {
-          return yearCompare;
-        }
-        return a.mes.compareTo(b.mes);
-      });
-      return items;
+      return _sortPeriods(snapshot.docs.map(BillingPeriod.fromFirestore).toList());
     });
+  }
+
+  Future<List<BillingPeriod>> fetchPeriods() async {
+    final snapshot = await _collection.get();
+    return _sortPeriods(snapshot.docs.map(BillingPeriod.fromFirestore).toList());
   }
 
   Future<BillingPeriod?> fetchActivePeriod() async {
@@ -99,7 +96,7 @@ class BillingPeriodFirestoreService {
     await _db.runTransaction((transaction) async {
       final selectedSnapshot = await transaction.get(selectedRef);
       if (!selectedSnapshot.exists) {
-        throw StateError('El periodo seleccionado no existe.');
+        throw StateError('El período seleccionado no existe.');
       }
 
       final currentSnapshot = await _collection
@@ -145,5 +142,16 @@ class BillingPeriodFirestoreService {
       'diciembre',
     ];
     return '${monthNames[mes - 1]} $ano';
+  }
+
+  static List<BillingPeriod> _sortPeriods(List<BillingPeriod> items) {
+    items.sort((a, b) {
+      final yearCompare = b.ano.compareTo(a.ano);
+      if (yearCompare != 0) {
+        return yearCompare;
+      }
+      return a.mes.compareTo(b.mes);
+    });
+    return items;
   }
 }

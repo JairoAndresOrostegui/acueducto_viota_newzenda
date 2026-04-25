@@ -110,7 +110,7 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
                         color: AppColors.brandBlueSoft,
                       ),
                       _MetricCard(
-                        label: 'Periodos generados',
+                        label: 'Períodos generados',
                         value: '${periods.length}',
                         color: AppColors.brandGreenSoft,
                       ),
@@ -216,7 +216,7 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
     await _runSave(
       action: () => _service.createPeriod(ano: year, mes: month),
       successMessage:
-          'Periodo ${BillingPeriodFirestoreService.periodName(year, month)} generado correctamente.',
+          'Período ${BillingPeriodFirestoreService.periodName(year, month)} generado correctamente.',
     );
   }
 
@@ -227,7 +227,7 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
     await _runSave(
       action: () => _service.createPeriodsForYear(ano: year, meses: months),
       successMessage:
-          'Se generaron ${months.length} periodos faltantes para $year.',
+          'Se generaron ${months.length} períodos faltantes para $year.',
     );
   }
 
@@ -235,7 +235,7 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
     await _runSave(
       action: () => _service.setCurrentPeriod(period.id),
       successMessage:
-          'Periodo ${BillingPeriodFirestoreService.periodName(period.ano, period.mes)} marcado como vigente.',
+          'Período ${BillingPeriodFirestoreService.periodName(period.ano, period.mes)} marcado como vigente.',
     );
   }
 
@@ -257,7 +257,7 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No fue posible generar el periodo: $error')),
+        SnackBar(content: Text('No fue posible generar el período: $error')),
       );
     } finally {
       if (mounted) {
@@ -292,10 +292,10 @@ class _PeriodsHeader extends StatelessWidget {
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Periodos', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Períodos', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 8),
             Text(
-              'Genera periodos mensuales desde 2025 hasta el año actual. Los periodos existentes solo se consultan; no se editan ni se eliminan.',
+              'Genera períodos mensuales desde 2025 hasta el año actual. Los períodos existentes solo se consultan; no se editan ni se eliminan.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 8),
@@ -304,7 +304,7 @@ class _PeriodsHeader extends StatelessWidget {
             ),
             if (currentPeriodName != null) ...[
               const SizedBox(height: 6),
-              Text('Periodo vigente: ${_displayName(currentPeriodName!)}'),
+              Text('Período vigente: ${_displayName(currentPeriodName!)}'),
             ],
           ],
         );
@@ -520,7 +520,7 @@ class _MonthCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Bloqueado para edicion y eliminacion.',
+              'Bloqueado para edición y eliminación.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
@@ -538,7 +538,7 @@ class _MonthCard extends StatelessWidget {
                     : Icons.radio_button_checked_rounded,
               ),
               label: Text(
-                isCurrent ? 'Periodo vigente' : 'Marcar vigente',
+                isCurrent ? 'Período vigente' : 'Marcar vigente',
               ),
             ),
           ] else
@@ -598,7 +598,7 @@ class _ErrorState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          'No fue posible cargar periodos.\n$message',
+          'No fue posible cargar períodos.\n$message',
           textAlign: TextAlign.center,
         ),
       ),
@@ -627,7 +627,7 @@ class _SavingOverlay extends StatelessWidget {
             child: CircularProgressIndicator(),
           ),
           SizedBox(height: 16),
-          Text('Generando periodos...'),
+          Text('Generando períodos...'),
         ],
       ),
     );

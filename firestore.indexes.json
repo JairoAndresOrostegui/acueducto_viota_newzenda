@@ -31,7 +31,30 @@
         { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
         { "fieldPath": "fecha", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "recibos",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "codigoUsuario", "order": "ASCENDING" },
+        { "fieldPath": "pagado", "order": "ASCENDING" }
+      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "consumos",
+      "fieldPath": "codigoContador",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    }
+  ]
 }
