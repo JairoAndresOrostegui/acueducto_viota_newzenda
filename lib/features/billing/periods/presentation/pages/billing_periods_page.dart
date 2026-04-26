@@ -62,6 +62,7 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
             final missingMonths = allowedMonths
                 .where((month) => !generatedMonths.contains(month))
                 .toList();
+            final compact = MediaQuery.sizeOf(context).width < 980;
 
             return AbsorbPointer(
               absorbing: _isSaving,
@@ -144,40 +145,75 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Expanded(
-                    child: GridView.builder(
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 260,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 1.0,
-                      ),
-                      itemCount: allowedMonths.length,
-                      itemBuilder: (context, index) {
-                        final month = allowedMonths[index];
-                        final period = selectedPeriods.cast<BillingPeriod?>().firstWhere(
-                              (item) => item?.mes == month,
-                              orElse: () => null,
+                  compact
+                      ? GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 260,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1.0,
+                          ),
+                          itemCount: allowedMonths.length,
+                          itemBuilder: (context, index) {
+                            final month = allowedMonths[index];
+                            final period = selectedPeriods.cast<BillingPeriod?>().firstWhere(
+                                  (item) => item?.mes == month,
+                                  orElse: () => null,
+                                );
+                            return _MonthCard(
+                              year: _selectedYear,
+                              month: month,
+                              period: period,
+                              isCurrent: period?.vigente == true,
+                              onCreate: period != null
+                                  ? null
+                                  : () => _createSinglePeriod(
+                                        year: _selectedYear,
+                                        month: month,
+                                      ),
+                              onSetCurrent: period == null || period.vigente
+                                  ? null
+                                  : () => _setCurrentPeriod(period),
                             );
-                        return _MonthCard(
-                          year: _selectedYear,
-                          month: month,
-                          period: period,
-                          isCurrent: period?.vigente == true,
-                          onCreate: period != null
-                              ? null
-                              : () => _createSinglePeriod(
-                                    year: _selectedYear,
-                                    month: month,
-                                  ),
-                          onSetCurrent: period == null || period.vigente
-                              ? null
-                              : () => _setCurrentPeriod(period),
-                        );
-                      },
-                    ),
-                  ),
+                          },
+                        )
+                      : Expanded(
+                          child: GridView.builder(
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 260,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: 1.0,
+                            ),
+                            itemCount: allowedMonths.length,
+                            itemBuilder: (context, index) {
+                              final month = allowedMonths[index];
+                              final period = selectedPeriods.cast<BillingPeriod?>().firstWhere(
+                                    (item) => item?.mes == month,
+                                    orElse: () => null,
+                                  );
+                              return _MonthCard(
+                                year: _selectedYear,
+                                month: month,
+                                period: period,
+                                isCurrent: period?.vigente == true,
+                                onCreate: period != null
+                                    ? null
+                                    : () => _createSinglePeriod(
+                                          year: _selectedYear,
+                                          month: month,
+                                        ),
+                                onSetCurrent: period == null || period.vigente
+                                    ? null
+                                    : () => _setCurrentPeriod(period),
+                              );
+                            },
+                          ),
+                        ),
                 ],
               ),
             );

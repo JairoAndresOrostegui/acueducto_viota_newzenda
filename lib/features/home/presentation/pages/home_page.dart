@@ -110,7 +110,7 @@ class HomePage extends StatelessWidget {
       case 'contador':
         return const _SingleModuleShell(
           title: 'Consumos',
-          message: 'Módulo disponible: Reportes',
+          message: 'MÃ³dulo disponible: Reportes',
           child: ConsumptionReportsAdminPage(),
         );
       default:
@@ -135,10 +135,10 @@ class _ProfileMissingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 920),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 920),
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
@@ -156,7 +156,7 @@ class _ProfileMissingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Tu usuario existe en Firebase Authentication, pero aún no tiene perfil en Firestore dentro de la colección usuarios.',
+                  'Tu usuario existe en Firebase Authentication, pero aÃºn no tiene perfil en Firestore dentro de la colecciÃ³n usuarios.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
@@ -184,26 +184,29 @@ class _NoAccessView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Container(
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: const Color(0xFFE0ECE8)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Acceso restringido para ${toDisplayUserName(userName)}',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Este módulo no está disponible para el perfil actual. Perfil: $role / $estado.',
-              textAlign: TextAlign.center,
-            ),
-          ],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFE0ECE8)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Acceso restringido para ${toDisplayUserName(userName)}',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Este mÃ³dulo no estÃ¡ disponible para el perfil actual. Perfil: $role / $estado.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );

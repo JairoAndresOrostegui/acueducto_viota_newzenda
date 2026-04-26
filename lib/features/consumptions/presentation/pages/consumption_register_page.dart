@@ -82,74 +82,107 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     final periodReadings = _readings
         .where((item) => item.periodoActual == _workingPeriod)
         .toList();
+    final compact = MediaQuery.sizeOf(context).width < 760;
     final pendingCount = periodReadings
         .where((item) => !item.isSynced && !item.isBlocked)
         .length;
     final blockedCount = periodReadings.where((item) => item.isBlocked).length;
     final irregularCount = periodReadings.where((item) => item.hasIrregularity).length;
+    final customerList = filteredCustomers.isEmpty
+        ? const Center(
+            child: Text(
+              'No hay clientes descargados o no coinciden con la busqueda.',
+            ),
+          )
+        : ListView.separated(
+            shrinkWrap: compact,
+            physics: compact
+                ? const NeverScrollableScrollPhysics()
+                : const AlwaysScrollableScrollPhysics(),
+            itemCount: filteredCustomers.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final customer = filteredCustomers[index];
+              final reading = _readingFor(
+                customer.codigoContador,
+                _workingPeriod,
+              );
+              final previousReading = _previousReadingFor(
+                customer.codigoContador,
+                beforePeriod: _workingPeriod,
+              );
+              return _ConsumptionCustomerCard(
+                customer: customer,
+                activePeriod: _workingPeriod,
+                reading: reading,
+                previousReading: previousReading,
+                onRegister: _workingPeriod == null ||
+                        reading?.facturado == true ||
+                        reading?.pagado == true
+                    ? null
+                    : () => _openRegisterDialog(customer),
+              );
+            },
+          );
 
     return Stack(
       children: [
         AbsorbPointer(
           absorbing: _isBusy,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Header(
-                workingPeriod: _workingPeriod,
-                cachedClients: _customers.length,
-                pendingCount: pendingCount,
-                blockedCount: blockedCount,
-                irregularCount: irregularCount,
-                onDownloadPeriod: _downloadWorkingPeriod,
-                onUploadReadings: _uploadPendingReadings,
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _query = value),
-                decoration: const InputDecoration(
-                  labelText: 'Buscar por nombre, codigo de contador o codigo de usuario',
-                  prefixIcon: Icon(Icons.search_rounded),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: filteredCustomers.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No hay clientes descargados o no coinciden con la busqueda.',
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: filteredCustomers.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final customer = filteredCustomers[index];
-                          final reading = _readingFor(
-                            customer.codigoContador,
-                            _workingPeriod,
-                          );
-                          final previousReading = _previousReadingFor(
-                            customer.codigoContador,
-                            beforePeriod: _workingPeriod,
-                          );
-                          return _ConsumptionCustomerCard(
-                            customer: customer,
-                            activePeriod: _workingPeriod,
-                            reading: reading,
-                            previousReading: previousReading,
-                            onRegister: _workingPeriod == null ||
-                                    reading?.facturado == true ||
-                                    reading?.pagado == true
-                                ? null
-                                : () => _openRegisterDialog(customer),
-                          );
-                        },
+          child: compact
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Header(
+                        workingPeriod: _workingPeriod,
+                        cachedClients: _customers.length,
+                        pendingCount: pendingCount,
+                        blockedCount: blockedCount,
+                        irregularCount: irregularCount,
+                        onDownloadPeriod: _downloadWorkingPeriod,
+                        onUploadReadings: _uploadPendingReadings,
                       ),
-              ),
-            ],
-          ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: (value) => setState(() => _query = value),
+                        decoration: const InputDecoration(
+                          labelText: 'Buscar por nombre, codigo de contador o codigo de usuario',
+                          prefixIcon: Icon(Icons.search_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      customerList,
+                    ],
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Header(
+                      workingPeriod: _workingPeriod,
+                      cachedClients: _customers.length,
+                      pendingCount: pendingCount,
+                      blockedCount: blockedCount,
+                      irregularCount: irregularCount,
+                      onDownloadPeriod: _downloadWorkingPeriod,
+                      onUploadReadings: _uploadPendingReadings,
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar por nombre, codigo de contador o codigo de usuario',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(child: customerList),
+                  ],
+                ),
         ),
         if (_isBusy)
           Positioned.fill(
@@ -214,7 +247,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   Future<void> _downloadWorkingPeriod() async {
     setState(() => _isBusy = true);
     try {
-      final pendingLocal = _readings.where((item) => !item.isSynced && !item.isBlocked);
+      final pendingLocal = _uploadableReadingsForWorkingPeriod();
       if (pendingLocal.isNotEmpty) {
         throw StateError(
           'Todavía hay lecturas locales pendientes por subir. Sube o resuelve primero el período de trabajo actual antes de descargar otro.',
@@ -462,6 +495,14 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     final values = merged.values.toList()
       ..sort((a, b) => b.fecha.compareTo(a.fecha));
     return values;
+  }
+
+  List<ConsumptionReading> _uploadableReadingsForWorkingPeriod() {
+    final workingPeriod = _workingPeriod;
+    return _readings
+        .where((item) => workingPeriod == null || item.periodoActual == workingPeriod)
+        .where((item) => !item.isSynced && !item.isBlocked)
+        .toList();
   }
 
   Future<void> _openRegisterDialog(ConsumptionCustomer customer) async {

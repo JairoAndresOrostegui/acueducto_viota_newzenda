@@ -56,213 +56,294 @@ class _ConsumptionReportsAdminPageState
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 980;
+    final readingsList = _items.isEmpty
+        ? null
+        : ListView.separated(
+            shrinkWrap: compact,
+            physics: compact
+                ? const NeverScrollableScrollPhysics()
+                : const AlwaysScrollableScrollPhysics(),
+            itemCount: _items.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final item = _items[index];
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item.periodoActual} - ${toDisplayUserName(item.nombreUsuario)}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Usuario: ${item.codigoUsuario} - Contador: ${item.codigoContador}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Lectura anterior: ${item.lecturaAnterior ?? '-'} - Lectura actual: ${item.lecturaActual} - Consumo: ${item.consumoCalculado ?? '-'}',
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Estado: ${item.estado} - Facturado: ${item.facturado ? 'si' : 'no'} - Pagado: ${item.pagado ? 'si' : 'no'}',
+                    ),
+                    if (item.irregularidad != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Irregularidad: ${item.irregularidad!.tipo} - ${item.irregularidad!.descripcion}',
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
+          );
+    final pendingList = _pendingInvoices.isEmpty
+        ? null
+        : ListView.separated(
+            shrinkWrap: compact,
+            physics: compact
+                ? const NeverScrollableScrollPhysics()
+                : const AlwaysScrollableScrollPhysics(),
+            itemCount: _pendingInvoices.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final invoice = _pendingInvoices[index];
+              final paid = invoice.valorPagado ?? 0;
+              final pending = math.max(invoice.total - paid, 0);
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      toDisplayUserName(invoice.nombreUsuario),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Usuario: ${invoice.codigoUsuario}'),
+                    const SizedBox(height: 4),
+                    Text('Contador: ${invoice.codigoContador}'),
+                    const SizedBox(height: 4),
+                    Text('Periodo: ${invoice.periodo}'),
+                    const SizedBox(height: 4),
+                    Text('Estado: ${toDisplayText(invoice.estado)}'),
+                    const SizedBox(height: 4),
+                    Text('Vencimiento: ${_formatDate(invoice.fechaVencimiento)}'),
+                    const SizedBox(height: 8),
+                    Text('Total facturado: ${_formatCurrency(invoice.total)}'),
+                    const SizedBox(height: 4),
+                    Text('Valor registrado: ${_formatCurrency(paid)}'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Saldo pendiente: ${_formatCurrency(pending)}',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: Colors.orange.shade900,
+                          ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+    final readingsPanel = _ReportPanel(
+      title: 'Lecturas consultadas',
+      emptyMessage: 'No hay resultados cargados.',
+      expandChild: !compact,
+      child: readingsList,
+    );
+    final pendingPanel = _ReportPanel(
+      title: 'Informe de cartera pendiente',
+      emptyMessage: 'No hay cartera pendiente con el filtro actual.',
+      expandChild: !compact,
+      child: pendingList,
+    );
+
     return Stack(
       children: [
         AbsorbPointer(
           absorbing: _loading,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Consultas y reportes',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Consulta consumos por periodo o usuario y revisa la cartera pendiente del mismo filtro.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  SizedBox(
-                    width: 220,
-                    child: TextField(
-                      controller: _periodController,
-                      decoration: const InputDecoration(
-                        labelText: 'Periodo (YYYY-MM) o vacio',
+          child: compact
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Consultas y reportes',
+                        style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 220,
-                    child: TextField(
-                      controller: _customerController,
-                      decoration: const InputDecoration(
-                        labelText: 'Codigo usuario o vacio',
+                      const SizedBox(height: 8),
+                      Text(
+                        'Consulta consumos por periodo o usuario y revisa la cartera pendiente del mismo filtro.',
+                        style: Theme.of(context).textTheme.bodyLarge,
                       ),
-                    ),
-                  ),
-                  FilterChip(
-                    label: const Text('Solo irregularidades'),
-                    selected: _onlyIrregular,
-                    onSelected: (value) {
-                      setState(() => _onlyIrregular = value);
-                    },
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: _load,
-                    icon: const Icon(Icons.search_rounded),
-                    label: const Text('Consultar'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _items.isEmpty ? null : _export,
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Exportar CSV'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _MetricCard(
-                    label: 'Lecturas',
-                    value: '${_items.length}',
-                  ),
-                  _MetricCard(
-                    label: 'Recibos pendientes',
-                    value: '${_pendingInvoices.length}',
-                  ),
-                  _MetricCard(
-                    label: 'Cartera pendiente',
-                    value: _formatCurrency(_pendingAmount),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 980;
-                    final readingsPanel = _ReportPanel(
-                      title: 'Lecturas consultadas',
-                      emptyMessage: 'No hay resultados cargados.',
-                      child: _items.isEmpty
-                          ? null
-                          : ListView.separated(
-                              itemCount: _items.length,
-                              separatorBuilder: (_, _) => const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                final item = _items[index];
-                                return Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: AppColors.border),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${item.periodoActual} - ${toDisplayUserName(item.nombreUsuario)}',
-                                        style: Theme.of(context).textTheme.titleMedium,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Usuario: ${item.codigoUsuario} - Contador: ${item.codigoContador}',
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Lectura anterior: ${item.lecturaAnterior ?? '-'} - Lectura actual: ${item.lecturaActual} - Consumo: ${item.consumoCalculado ?? '-'}',
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Estado: ${item.estado} - Facturado: ${item.facturado ? 'si' : 'no'} - Pagado: ${item.pagado ? 'si' : 'no'}',
-                                      ),
-                                      if (item.irregularidad != null) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Irregularidad: ${item.irregularidad!.tipo} - ${item.irregularidad!.descripcion}',
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    );
-                    final pendingPanel = _ReportPanel(
-                      title: 'Informe de cartera pendiente',
-                      emptyMessage: 'No hay cartera pendiente con el filtro actual.',
-                      child: _pendingInvoices.isEmpty
-                          ? null
-                          : ListView.separated(
-                              itemCount: _pendingInvoices.length,
-                              separatorBuilder: (_, _) => const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                final invoice = _pendingInvoices[index];
-                                final paid = invoice.valorPagado ?? 0;
-                                final pending = math.max(invoice.total - paid, 0);
-                                return Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: AppColors.border),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        toDisplayUserName(invoice.nombreUsuario),
-                                        style: Theme.of(context).textTheme.titleMedium,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text('Usuario: ${invoice.codigoUsuario}'),
-                                      const SizedBox(height: 4),
-                                      Text('Contador: ${invoice.codigoContador}'),
-                                      const SizedBox(height: 4),
-                                      Text('Periodo: ${invoice.periodo}'),
-                                      const SizedBox(height: 4),
-                                      Text('Estado: ${toDisplayText(invoice.estado)}'),
-                                      const SizedBox(height: 4),
-                                      Text('Vencimiento: ${_formatDate(invoice.fechaVencimiento)}'),
-                                      const SizedBox(height: 8),
-                                      Text('Total facturado: ${_formatCurrency(invoice.total)}'),
-                                      const SizedBox(height: 4),
-                                      Text('Valor registrado: ${_formatCurrency(paid)}'),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Saldo pendiente: ${_formatCurrency(pending)}',
-                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                              color: Colors.orange.shade900,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    );
-
-                    if (compact) {
-                      return Column(
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
                         children: [
-                          Expanded(child: readingsPanel),
-                          const SizedBox(height: 16),
-                          Expanded(child: pendingPanel),
+                          SizedBox(
+                            width: 220,
+                            child: TextField(
+                              controller: _periodController,
+                              decoration: const InputDecoration(
+                                labelText: 'Periodo (YYYY-MM) o vacio',
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 220,
+                            child: TextField(
+                              controller: _customerController,
+                              decoration: const InputDecoration(
+                                labelText: 'Codigo usuario o vacio',
+                              ),
+                            ),
+                          ),
+                          FilterChip(
+                            label: const Text('Solo irregularidades'),
+                            selected: _onlyIrregular,
+                            onSelected: (value) {
+                              setState(() => _onlyIrregular = value);
+                            },
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.search_rounded),
+                            label: const Text('Consultar'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _items.isEmpty ? null : _export,
+                            icon: const Icon(Icons.download_rounded),
+                            label: const Text('Exportar CSV'),
+                          ),
                         ],
-                      );
-                    }
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _MetricCard(
+                            label: 'Lecturas',
+                            value: '${_items.length}',
+                          ),
+                          _MetricCard(
+                            label: 'Recibos pendientes',
+                            value: '${_pendingInvoices.length}',
+                          ),
+                          _MetricCard(
+                            label: 'Cartera pendiente',
+                            value: _formatCurrency(_pendingAmount),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      readingsPanel,
+                      const SizedBox(height: 16),
+                      pendingPanel,
+                    ],
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Consultas y reportes',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Consulta consumos por periodo o usuario y revisa la cartera pendiente del mismo filtro.',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
-                        Expanded(flex: 3, child: readingsPanel),
-                        const SizedBox(width: 16),
-                        Expanded(flex: 2, child: pendingPanel),
+                        SizedBox(
+                          width: 220,
+                          child: TextField(
+                            controller: _periodController,
+                            decoration: const InputDecoration(
+                              labelText: 'Periodo (YYYY-MM) o vacio',
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: TextField(
+                            controller: _customerController,
+                            decoration: const InputDecoration(
+                              labelText: 'Codigo usuario o vacio',
+                            ),
+                          ),
+                        ),
+                        FilterChip(
+                          label: const Text('Solo irregularidades'),
+                          selected: _onlyIrregular,
+                          onSelected: (value) {
+                            setState(() => _onlyIrregular = value);
+                          },
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.search_rounded),
+                          label: const Text('Consultar'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _items.isEmpty ? null : _export,
+                          icon: const Icon(Icons.download_rounded),
+                          label: const Text('Exportar CSV'),
+                        ),
                       ],
-                    );
-                  },
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        _MetricCard(
+                          label: 'Lecturas',
+                          value: '${_items.length}',
+                        ),
+                        _MetricCard(
+                          label: 'Recibos pendientes',
+                          value: '${_pendingInvoices.length}',
+                        ),
+                        _MetricCard(
+                          label: 'Cartera pendiente',
+                          value: _formatCurrency(_pendingAmount),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 3, child: readingsPanel),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 2, child: pendingPanel),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
         if (_loading)
           Positioned.fill(
@@ -399,11 +480,13 @@ class _ReportPanel extends StatelessWidget {
     required this.title,
     required this.emptyMessage,
     required this.child,
+    this.expandChild = true,
   });
 
   final String title;
   final String emptyMessage;
   final Widget? child;
+  final bool expandChild;
 
   @override
   Widget build(BuildContext context) {
@@ -419,12 +502,18 @@ class _ReportPanel extends StatelessWidget {
         children: [
           Text(title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
-          Expanded(
-            child: child ??
+          if (expandChild)
+            Expanded(
+              child: child ??
+                  Center(
+                    child: Text(emptyMessage),
+                  ),
+            )
+          else
+            child ??
                 Center(
                   child: Text(emptyMessage),
                 ),
-          ),
         ],
       ),
     );

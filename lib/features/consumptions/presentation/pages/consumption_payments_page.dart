@@ -154,50 +154,88 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    final invoicesList = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _invoices.isEmpty
+            ? const Center(
+                child: Text(
+                  'No hay recibos facturados para este periodo.',
+                ),
+              )
+            : ListView.separated(
+                shrinkWrap: compact,
+                physics: compact
+                    ? const NeverScrollableScrollPhysics()
+                    : const AlwaysScrollableScrollPhysics(),
+                itemCount: _invoices.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) => _PaymentCard(
+                  invoice: _invoices[index],
+                  onUpdate: () => _openPaymentDialog(_invoices[index]),
+                ),
+              );
+
     return Stack(
       children: [
         AbsorbPointer(
           absorbing: _saving,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Header(
-                periods: _periods,
-                selectedPeriod: _selectedPeriod,
-                paidCount: _invoices.where((item) => item.pagado).length,
-                pendingCount: _invoices.where((item) => !item.pagado).length,
-                onPeriodChanged: (period) {
-                  if (period != null) {
-                    _loadInvoices(period);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!, style: TextStyle(color: Colors.red.shade800)),
-                ),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _invoices.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No hay recibos facturados para este periodo.',
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: _invoices.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) => _PaymentCard(
-                              invoice: _invoices[index],
-                              onUpdate: () => _openPaymentDialog(_invoices[index]),
-                            ),
+          child: compact
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Header(
+                        periods: _periods,
+                        selectedPeriod: _selectedPeriod,
+                        paidCount: _invoices.where((item) => item.pagado).length,
+                        pendingCount: _invoices.where((item) => !item.pagado).length,
+                        onPeriodChanged: (period) {
+                          if (period != null) {
+                            _loadInvoices(period);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            _error!,
+                            style: TextStyle(color: Colors.red.shade800),
                           ),
-              ),
-            ],
-          ),
+                        ),
+                      invoicesList,
+                    ],
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Header(
+                      periods: _periods,
+                      selectedPeriod: _selectedPeriod,
+                      paidCount: _invoices.where((item) => item.pagado).length,
+                      pendingCount: _invoices.where((item) => !item.pagado).length,
+                      onPeriodChanged: (period) {
+                        if (period != null) {
+                          _loadInvoices(period);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(color: Colors.red.shade800),
+                        ),
+                      ),
+                    Expanded(child: invoicesList),
+                  ],
+                ),
         ),
         if (_saving)
           Positioned.fill(

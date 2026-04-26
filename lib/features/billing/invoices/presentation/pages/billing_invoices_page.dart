@@ -596,11 +596,121 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 900;
+    final invoicesList = _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _billableReadings.isEmpty && _invoices.isEmpty
+            ? const Center(
+                child: Text(
+                  'No hay recibos generados para este perÃ­odo.',
+                ),
+              )
+            : ListView.separated(
+                shrinkWrap: compact,
+                physics: compact
+                    ? const NeverScrollableScrollPhysics()
+                    : const AlwaysScrollableScrollPhysics(),
+                itemCount:
+                    _billableReadings.length + _filteredInvoices.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  if (index < _billableReadings.length) {
+                    return _BillableReadingCard(
+                      reading: _billableReadings[index],
+                      onGenerate: () => _generateInvoiceForReading(
+                        _billableReadings[index],
+                      ),
+                    );
+                  }
+                  return _InvoicePreviewCard(
+                    invoice:
+                        _filteredInvoices[index - _billableReadings.length],
+                    onPrint: () => _printInvoice(
+                      _filteredInvoices[index - _billableReadings.length],
+                    ),
+                  );
+                },
+              );
+
     return Stack(
       children: [
         AbsorbPointer(
           absorbing: _saving,
-          child: Column(
+          child: compact
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _HeaderPanel(
+                        periods: _periods,
+                        selectedPeriod: _selectedPeriod,
+                        billableCount: _billableReadings.length,
+                        invoiceCount: _invoices.length,
+                        unpreparedCount: _unpreparedReadings.length,
+                        onPeriodChanged: (period) {
+                          if (period != null) {
+                            _loadPeriodData(period);
+                          }
+                        },
+                        onGenerate: _billableReadings.isEmpty || _saving
+                            ? null
+                            : _generateInvoices,
+                        onRegenerate: _invoices.isEmpty || _saving
+                            ? null
+                            : _regenerateInvoices,
+                        onExportPeriod: _invoices.isEmpty || _saving
+                            ? null
+                            : _exportPeriodInvoicesUnified,
+                        onExportSector:
+                            _invoices.isEmpty ||
+                                    _availableSectors.isEmpty ||
+                                    _saving
+                                ? null
+                                : _exportSectorInvoicesUnified,
+                        onShowUnprepared: _unpreparedReadings.isEmpty
+                            ? null
+                            : _showUnpreparedReadings,
+                      ),
+                      const SizedBox(height: 16),
+                      if (_availableSectors.isNotEmpty) ...[
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('Todos los sectores'),
+                              selected: _selectedSectorFilter == null,
+                              onSelected: (_) {
+                                setState(() => _selectedSectorFilter = null);
+                              },
+                            ),
+                            ..._availableSectors.map(
+                              (sector) => ChoiceChip(
+                                label: Text(sector),
+                                selected: _selectedSectorFilter == sector,
+                                onSelected: (_) {
+                                  setState(() => _selectedSectorFilter = sector);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            _error!,
+                            style: TextStyle(color: Colors.red.shade800),
+                          ),
+                        ),
+                      invoicesList,
+                    ],
+                  ),
+                )
+              : Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _HeaderPanel(
