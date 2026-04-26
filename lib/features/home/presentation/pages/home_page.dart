@@ -110,7 +110,7 @@ class HomePage extends StatelessWidget {
       case 'contador':
         return const _SingleModuleShell(
           title: 'Consumos',
-          message: 'MÃ³dulo disponible: Reportes',
+          message: 'Modulo disponible: Reportes',
           child: ConsumptionReportsAdminPage(),
         );
       default:
@@ -156,7 +156,7 @@ class _ProfileMissingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Tu usuario existe en Firebase Authentication, pero aÃºn no tiene perfil en Firestore dentro de la colecciÃ³n usuarios.',
+                  'Tu usuario existe en Firebase Authentication, pero aun no tiene perfil en Firestore dentro de la coleccion usuarios.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
@@ -202,7 +202,7 @@ class _NoAccessView extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Este mÃ³dulo no estÃ¡ disponible para el perfil actual. Perfil: $role / $estado.',
+                'Este modulo no esta disponible para el perfil actual. Perfil: $role / $estado.',
                 textAlign: TextAlign.center,
               ),
             ],

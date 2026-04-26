@@ -1,16 +1,14 @@
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../../domain/invoice.dart';
+import 'pdf_file_exporter.dart';
 
 class InvoicePrintingService {
   Future<void> printInvoice(Invoice invoice) async {
-    await Printing.layoutPdf(
-      name: _fileName(invoice),
-      onLayout: (format) => buildPdf(invoice, format: format),
-    );
+    final bytes = await buildPdf(invoice);
+    await PdfFileExporter.save(bytes: bytes, fileName: _fileName(invoice));
   }
 
   Future<void> printInvoices(
@@ -20,20 +18,17 @@ class InvoicePrintingService {
     if (invoices.isEmpty) {
       return;
     }
-    await Printing.layoutPdf(
-      name: fileName,
-      onLayout: (format) => buildCombinedPdf(
-        invoices,
-        format: format,
-        title: fileName,
-      ),
+    final bytes = await buildCombinedPdf(
+      invoices,
+      title: fileName,
     );
+    await PdfFileExporter.save(bytes: bytes, fileName: fileName);
   }
 
   Future<void> shareInvoicesIndividually(List<Invoice> invoices) async {
     for (final invoice in invoices) {
       final bytes = await buildPdf(invoice);
-      await Printing.sharePdf(bytes: bytes, filename: _fileName(invoice));
+      await PdfFileExporter.save(bytes: bytes, fileName: _fileName(invoice));
     }
   }
 

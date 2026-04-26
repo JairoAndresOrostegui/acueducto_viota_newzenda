@@ -170,7 +170,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     try {
       final values = await _valueService.fetchActiveItem();
       if (values == null) {
-        throw StateError('No hay configuración activa de valores.');
+        throw StateError('No hay configuracion activa de valores.');
       }
       final paymentMethods = await _paymentMethodService.fetchItems();
       await _invoiceService.generateInvoicesForReadings(
@@ -213,7 +213,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     try {
       final values = await _valueService.fetchActiveItem();
       if (values == null) {
-        throw StateError('No hay configuración activa de valores.');
+        throw StateError('No hay configuracion activa de valores.');
       }
       final paymentMethods = await _paymentMethodService.fetchItems();
       await _invoiceService.generateInvoicesForReadings(
@@ -254,7 +254,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       builder: (context) => AlertDialog(
         title: const Text('Regenerar recibos'),
         content: const Text(
-          'Se regenerarán solo los recibos no pagados del período seleccionado con los valores vigentes. Los recibos pagados no se modificarán.',
+          'Se regeneraran solo los recibos no pagados del periodo seleccionado con los valores vigentes. Los recibos pagados no se modificaran.',
         ),
         actions: [
           TextButton(
@@ -276,7 +276,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     try {
       final values = await _valueService.fetchActiveItem();
       if (values == null) {
-        throw StateError('No hay configuración activa de valores.');
+        throw StateError('No hay configuracion activa de valores.');
       }
       final paymentMethods = await _paymentMethodService.fetchItems();
       final result = await _invoiceService.regenerateInvoicesForPeriod(
@@ -332,7 +332,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => const _ExportInvoicesDialog(
-        title: 'Exportar período',
+        title: 'Exportar periodo',
         description:
             'Selecciona si deseas un solo PDF con una hoja por usuario o archivos individuales.',
       ),
@@ -358,7 +358,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       builder: (context) => _ExportInvoicesDialog(
         title: 'Exportar por sector',
         description:
-            'Selecciona el sector y el formato de salida para los recibos del período.',
+            'Selecciona el sector y el formato de salida para los recibos del periodo.',
         sectors: _availableSectors,
       ),
     );
@@ -394,7 +394,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       return;
     }
     final mode = await _showExportModeDialog(
-      title: 'Exportar período',
+      title: 'Exportar periodo',
       description:
           'Selecciona si deseas un solo PDF con una hoja por usuario o archivos individuales.',
     );
@@ -515,14 +515,14 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Estos usuarios aún no tienen la lectura lista para generar recibo en el período seleccionado.',
+                  'Estos usuarios aun no tienen la lectura lista para generar recibo en el periodo seleccionado.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 16),
                 Expanded(
                   child: _unpreparedReadings.isEmpty
                       ? const Center(
-                          child: Text('Todos los usuarios están listos.'),
+                          child: Text('Todos los usuarios estan listos.'),
                         )
                       : ListView.separated(
                           itemCount: _unpreparedReadings.length,
@@ -538,7 +538,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Código ${item.codigoUsuario} · Contador ${item.codigoContador}',
+                                  'Codigo ${item.codigoUsuario} - Contador ${item.codigoContador}',
                                 ),
                                 const SizedBox(height: 4),
                                 Text(_unpreparedReason(item)),
@@ -576,7 +576,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     if (item.lecturaActual < previous) {
       return 'La lectura actual es menor a la lectura anterior.';
     }
-    return 'Aún no cumple las condiciones mínimas de facturación.';
+    return 'Aun no cumple las condiciones minimas de facturacion.';
   }
 
   String _displaySector(String value) {
@@ -602,7 +602,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
         : _billableReadings.isEmpty && _invoices.isEmpty
             ? const Center(
                 child: Text(
-                  'No hay recibos generados para este perÃ­odo.',
+                  'No hay recibos generados para este periodo.',
                 ),
               )
             : ListView.separated(
@@ -781,7 +781,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                     : _billableReadings.isEmpty && _invoices.isEmpty
                         ? const Center(
                             child: Text(
-                              'No hay recibos generados para este período.',
+                              'No hay recibos generados para este periodo.',
                             ),
                           )
                         : ListView.separated(
@@ -854,9 +854,9 @@ class _BillableReadingCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 6),
-              Text('Pendiente por facturar · Código ${reading.codigoUsuario} · Contador ${reading.codigoContador}'),
+              Text('Pendiente por facturar - Codigo ${reading.codigoUsuario} - Contador ${reading.codigoContador}'),
               const SizedBox(height: 6),
-              Text('Lectura anterior: $previousReading · Actual: ${reading.lecturaActual} · Consumo: $consumption m³'),
+              Text('Lectura anterior: $previousReading - Actual: ${reading.lecturaActual} - Consumo: $consumption m3'),
             ],
           );
           final action = ElevatedButton.icon(
@@ -919,10 +919,10 @@ class _Header extends StatelessWidget {
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Facturación', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Facturacion', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 8),
             Text(
-              'Selecciona un período y genera recibos para los consumos pendientes de facturar.',
+              'Selecciona un periodo y genera recibos para los consumos pendientes de facturar.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 12),
@@ -946,13 +946,13 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Período', style: Theme.of(context).textTheme.labelLarge),
+                  Text('Periodo', style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<BillingPeriod>(
                     isExpanded: true,
                     initialValue: selectedPeriod,
                     decoration: const InputDecoration(
-                      hintText: 'Selecciona un período',
+                      hintText: 'Selecciona un periodo',
                     ),
                     items: periods
                         .map(
@@ -983,7 +983,7 @@ class _Header extends StatelessWidget {
               onPressed: onExportPeriod,
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
               icon: const Icon(Icons.picture_as_pdf_rounded),
-              label: const Text('PDF período'),
+              label: const Text('PDF periodo'),
             ),
             OutlinedButton.icon(
               onPressed: onExportSector,
@@ -1041,7 +1041,7 @@ class _InvoicePreviewCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'ASOCIACIÓN DE USUARIOS DEL ACUEDUCTO DE LAS VEREDAS DE QUITASOL Y JAZMÍN',
+            'ASOCIACION DE USUARIOS DEL ACUEDUCTO DE LAS VEREDAS DE QUITASOL Y JAZMIN',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 10),
@@ -1054,19 +1054,19 @@ class _InvoicePreviewCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          const Text('Municipio de Viotá · NIT 808.000.868-7'),
+          const Text('Municipio de Viota - NIT 808.000.868-7'),
           const SizedBox(height: 14),
           Wrap(
             spacing: 18,
             runSpacing: 8,
             children: [
-              _LabelValue(label: 'Código usuario', value: invoice.codigoUsuario),
+              _LabelValue(label: 'Codigo usuario', value: invoice.codigoUsuario),
               _LabelValue(label: 'Contador', value: invoice.codigoContador),
               _LabelValue(label: 'Usuario', value: toDisplayUserName(invoice.nombreUsuario)),
-              _LabelValue(label: 'Período facturado', value: invoice.periodo),
+              _LabelValue(label: 'Periodo facturado', value: invoice.periodo),
               _LabelValue(label: 'Generado', value: _formatDate(invoice.fechaGeneracion)),
               _LabelValue(label: 'Vence', value: _formatDate(invoice.fechaVencimiento)),
-              _LabelValue(label: 'Consumo mes m³', value: '${invoice.consumoM3}'),
+              _LabelValue(label: 'Consumo mes m3', value: '${invoice.consumoM3}'),
               _LabelValue(label: 'Lectura anterior', value: '${invoice.lecturaAnterior ?? '-'}'),
               _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
             ],
@@ -1174,10 +1174,10 @@ class _HeaderPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Facturación', style: Theme.of(context).textTheme.headlineMedium),
+              Text('Facturacion', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
               Text(
-                'Selecciona un período, genera los recibos listos y usa las acciones masivas desde este panel.',
+                'Selecciona un periodo, genera los recibos listos y usa las acciones masivas desde este panel.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 16),
@@ -1204,13 +1204,13 @@ class _HeaderPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Período de trabajo', style: Theme.of(context).textTheme.titleMedium),
+              Text('Periodo de trabajo', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               DropdownButtonFormField<BillingPeriod>(
                 isExpanded: true,
                 initialValue: selectedPeriod,
                 decoration: const InputDecoration(
-                  hintText: 'Selecciona un período',
+                  hintText: 'Selecciona un periodo',
                 ),
                 items: periods
                     .map(
@@ -1249,7 +1249,7 @@ class _HeaderPanel extends StatelessWidget {
                       minimumSize: const Size(0, 48),
                     ),
                     icon: const Icon(Icons.picture_as_pdf_rounded),
-                    label: const Text('PDF período'),
+                    label: const Text('PDF periodo'),
                   ),
                   OutlinedButton.icon(
                     onPressed: onExportSector,
@@ -1445,7 +1445,7 @@ class _SectorExportDialog extends StatelessWidget {
     return _ExportInvoicesDialog(
       title: 'Exportar por sector',
       description:
-          'Selecciona el sector y el formato de salida para los recibos del período.',
+          'Selecciona el sector y el formato de salida para los recibos del periodo.',
       sectors: sectors,
     );
   }
@@ -1457,7 +1457,7 @@ enum _PdfExportMode {
 }
 
 String _periodLabel(BillingPeriod period) {
-  return '${period.clave} · ${toDisplayText(period.nombre)}${period.vigente ? ' · Vigente' : ''}';
+  return '${period.clave} - ${toDisplayText(period.nombre)}${period.vigente ? ' - Vigente' : ''}';
 }
 
 String _formatDate(DateTime value) {
@@ -1476,3 +1476,4 @@ String _formatCurrency(int value) {
   }
   return '\$${buffer.toString()}';
 }
+
