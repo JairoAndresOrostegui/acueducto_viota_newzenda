@@ -2,6 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/app_user.dart';
 
+class UserPageResult {
+  const UserPageResult({
+    required this.users,
+    required this.lastDocument,
+    required this.hasMore,
+  });
+
+  final List<AppUser> users;
+  final DocumentSnapshot<Map<String, dynamic>>? lastDocument;
+  final bool hasMore;
+}
+
 class UserFirestoreService {
   UserFirestoreService({FirebaseFirestore? firestore})
       : _firestore = firestore;
@@ -11,17 +23,49 @@ class UserFirestoreService {
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       (_firestore ?? FirebaseFirestore.instance).collection('usuarios');
 
-  Stream<List<AppUser>> watchUsers({int limit = 200}) {
-    return _usersCollection
-        .orderBy('nombre')
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map(AppUser.fromFirestore).toList());
-  }
-
   Future<List<AppUser>> fetchUsers({int limit = 200}) async {
     final snapshot = await _usersCollection.orderBy('nombre').limit(limit).get();
     return snapshot.docs.map(AppUser.fromFirestore).toList();
+  }
+
+  Future<UserPageResult> fetchUsersPage({
+    int limit = 10,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    Query<Map<String, dynamic>> query = _usersCollection
+        .orderBy('nombre')
+        .limit(limit + 1);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.get();
+    final docs = snapshot.docs;
+    final hasMore = docs.length > limit;
+    final pageDocs = hasMore ? docs.take(limit).toList() : docs;
+
+    return UserPageResult(
+      users: pageDocs.map(AppUser.fromFirestore).toList(),
+      lastDocument: pageDocs.isEmpty ? startAfter : pageDocs.last,
+      hasMore: hasMore,
+    );
+  }
+
+  Future<List<AppUser>> fetchAllUsers({int batchSize = 200}) async {
+    final users = <AppUser>[];
+    DocumentSnapshot<Map<String, dynamic>>? cursor;
+
+    while (true) {
+      final page = await fetchUsersPage(limit: batchSize, startAfter: cursor);
+      users.addAll(page.users);
+      if (!page.hasMore || page.lastDocument == null) {
+        break;
+      }
+      cursor = page.lastDocument;
+    }
+
+    return users;
   }
 
   Future<List<AppUser>> fetchActiveClients({int limit = 500}) async {

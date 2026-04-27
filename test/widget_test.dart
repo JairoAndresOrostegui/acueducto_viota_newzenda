@@ -141,8 +141,20 @@ class FakeUserFirestoreService extends UserFirestoreService {
   }
 
   @override
-  Stream<List<AppUser>> watchUsers({int limit = 200}) async* {
-    yield [_adminProfile('test-user')];
+  Future<UserPageResult> fetchUsersPage({
+    int limit = 10,
+    dynamic startAfter,
+  }) async {
+    return UserPageResult(
+      users: [_adminProfile('test-user')],
+      lastDocument: null,
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<List<AppUser>> fetchAllUsers({int batchSize = 200}) async {
+    return [_adminProfile('test-user')];
   }
 }
 

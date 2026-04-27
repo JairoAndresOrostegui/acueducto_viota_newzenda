@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,7 +37,7 @@ class UsersAdminPage extends StatefulWidget {
 }
 
 class _UsersAdminPageState extends State<UsersAdminPage> {
-  static const int _userLimit = 200;
+  static const int _pageSize = 10;
 
   late final UserFirestoreService _userService =
       widget.userService ?? UserFirestoreService();
@@ -50,8 +51,22 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       widget.sectorService ?? SectorCatalogService();
 
   final TextEditingController _searchController = TextEditingController();
+  final List<_PageCursor> _pageCursors = [const _PageCursor()];
+
   String _search = '';
   bool _isSaving = false;
+  bool _isLoadingUsers = true;
+  bool _isSearching = false;
+  String? _loadError;
+  int _currentPageIndex = 0;
+  bool _hasNextPage = false;
+  List<AppUser> _users = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
 
   @override
   void dispose() {
@@ -63,82 +78,88 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        StreamBuilder<List<AppUser>>(
-          stream: _userService.watchUsers(limit: _userLimit),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return _ErrorState(message: snapshot.error.toString());
-            }
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final users = snapshot.data!;
-            final filtered = users.where(_matchesSearch).toList();
-
-            return AbsorbPointer(
-              absorbing: _isSaving,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _Header(onCreate: () => _openForm()),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      _MetricCard(
-                        label: 'Usuarios cargados',
-                        value: '${users.length}',
-                        color: AppColors.brandBlueSoft,
-                      ),
-                      _MetricCard(
-                        label: 'Activos',
-                        value:
-                            '${users.where((u) => u.estado == 'activo').length}',
-                        color: AppColors.brandGreenSoft,
-                      ),
-                      _MetricCard(
-                        label: 'Clientes',
-                        value: '${users.where((u) => u.rol == 'cliente').length}',
-                        color: AppColors.brandGreenSoft,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _searchController,
-                    onChanged: (value) => setState(() => _search = value),
-                    decoration: const InputDecoration(
-                      labelText:
-                          'Buscar por nombre, correo, rol, tipo cliente, documento o estado',
-                      prefixIcon: Icon(Icons.search_rounded),
+        if (_loadError != null)
+          _ErrorState(message: _loadError!)
+        else if (_isLoadingUsers)
+          const Center(child: CircularProgressIndicator())
+        else
+          AbsorbPointer(
+            absorbing: _isSaving,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _UsersPageHeader(onCreate: () => _openForm()),
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _MetricCard(
+                      label: _isSearching
+                          ? 'Resultados encontrados'
+                          : 'Usuarios en esta página',
+                      value: '${_users.length}',
+                      color: AppColors.brandBlueSoft,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? const _EmptyState()
-                        : ListView.separated(
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              final user = filtered[index];
-                              return _UserCard(
-                                user: user,
-                                canDelete: user.uid != widget.currentUser.uid,
-                                onEdit: () => _openForm(user: user),
-                                onDelete: () => _confirmDelete(user),
-                              );
-                            },
+                    _MetricCard(
+                      label: 'Activos',
+                      value: '${_users.where((u) => u.estado == 'activo').length}',
+                      color: AppColors.brandGreenSoft,
+                    ),
+                    _MetricCard(
+                      label: 'Clientes',
+                      value: '${_users.where((u) => u.rol == 'cliente').length}',
+                      color: AppColors.brandGreenSoft,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _searchController,
+                  onChanged: _onSearchChanged,
+                  decoration: InputDecoration(
+                    labelText:
+                        'Buscar por nombre, correo, rol, tipo cliente, documento o estado',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _search.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: _clearSearch,
+                            tooltip: 'Limpiar búsqueda',
+                            icon: const Icon(Icons.close_rounded),
                           ),
                   ),
-                ],
-              ),
-            );
-          },
-        ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _users.isEmpty
+                      ? const _EmptyState()
+                      : ListView.separated(
+                          itemCount: _users.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final user = _users[index];
+                            return _UserCard(
+                              user: user,
+                              canDelete: user.uid != widget.currentUser.uid,
+                              onEdit: () => _openForm(user: user),
+                              onDelete: () => _confirmDelete(user),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 16),
+                _PaginationBar(
+                  currentPage: _currentPageIndex + 1,
+                  isSearching: _isSearching,
+                  hasPrevious: !_isSearching && _currentPageIndex > 0,
+                  hasNext: !_isSearching && _hasNextPage,
+                  onPrevious: _previousPage,
+                  onNext: _nextPage,
+                ),
+              ],
+            ),
+          ),
         if (_isSaving)
           Positioned.fill(
             child: ClipRect(
@@ -155,6 +176,93 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
           ),
       ],
     );
+  }
+
+  Future<void> _loadUsers({int? pageIndex}) async {
+    final targetPage = pageIndex ?? _currentPageIndex;
+    setState(() {
+      _isLoadingUsers = true;
+      _loadError = null;
+    });
+
+    try {
+      if (_search.isNotEmpty) {
+        final allUsers = await _userService.fetchAllUsers();
+        final filtered = allUsers.where(_matchesSearch).toList();
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _isSearching = true;
+          _isLoadingUsers = false;
+          _users = filtered;
+          _currentPageIndex = 0;
+          _hasNextPage = false;
+        });
+        return;
+      }
+
+      final cursor = _pageCursors[targetPage].lastDocument;
+      final page = await _userService.fetchUsersPage(
+        limit: _pageSize,
+        startAfter: cursor,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      if (_pageCursors.length > targetPage + 1) {
+        _pageCursors.removeRange(targetPage + 1, _pageCursors.length);
+      }
+      if (page.hasMore) {
+        _pageCursors.add(_PageCursor(lastDocument: page.lastDocument));
+      }
+
+      setState(() {
+        _isSearching = false;
+        _isLoadingUsers = false;
+        _users = page.users;
+        _currentPageIndex = targetPage;
+        _hasNextPage = page.hasMore;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingUsers = false;
+        _loadError = error.toString();
+      });
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    final normalized = value.trim();
+    if (normalized == _search) {
+      return;
+    }
+    setState(() => _search = normalized);
+    _loadUsers(pageIndex: 0);
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _search = '');
+    _loadUsers(pageIndex: 0);
+  }
+
+  Future<void> _nextPage() async {
+    if (_isLoadingUsers || !_hasNextPage) {
+      return;
+    }
+    await _loadUsers(pageIndex: _currentPageIndex + 1);
+  }
+
+  Future<void> _previousPage() async {
+    if (_isLoadingUsers || _currentPageIndex == 0) {
+      return;
+    }
+    await _loadUsers(pageIndex: _currentPageIndex - 1);
   }
 
   bool _matchesSearch(AppUser user) {
@@ -222,6 +330,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
           ),
         ),
       );
+      await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
     } catch (error) {
       if (!mounted) {
         return;
@@ -280,6 +389,10 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
 
     try {
       await _adminFunctionsService.deleteManagedUser(user.uid);
+      if (!mounted) {
+        return;
+      }
+      await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
       if (!mounted) {
         return;
       }
@@ -895,8 +1008,11 @@ class UserFormResult {
   final String? password;
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.onCreate});
+class LegacyUsersHeader extends StatelessWidget {
+  const LegacyUsersHeader({
+    super.key,
+    required this.onCreate,
+  });
 
   final VoidCallback onCreate;
 
@@ -950,6 +1066,121 @@ class _Header extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _UsersPageHeader extends StatelessWidget {
+  const _UsersPageHeader({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        final title = Text(
+          'Usuarios',
+          style: Theme.of(context).textTheme.headlineMedium,
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: onCreate,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                ),
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Nuevo usuario'),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: title),
+            const SizedBox(width: 16),
+            ElevatedButton.icon(
+              onPressed: onCreate,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(0, 48),
+              ),
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Nuevo usuario'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PageCursor {
+  const _PageCursor({this.lastDocument});
+
+  final DocumentSnapshot<Map<String, dynamic>>? lastDocument;
+}
+
+class _PaginationBar extends StatelessWidget {
+  const _PaginationBar({
+    required this.currentPage,
+    required this.isSearching,
+    required this.hasPrevious,
+    required this.hasNext,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int currentPage;
+  final bool isSearching;
+  final bool hasPrevious;
+  final bool hasNext;
+  final Future<void> Function() onPrevious;
+  final Future<void> Function() onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isSearching) {
+      return Text(
+        'La búsqueda recorre todos los usuarios y pausa la paginación mientras esté activa.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      );
+    }
+
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        Text(
+          'Página $currentPage',
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            OutlinedButton.icon(
+              onPressed: hasPrevious ? onPrevious : null,
+              icon: const Icon(Icons.chevron_left_rounded),
+              label: const Text('Anterior'),
+            ),
+            FilledButton.icon(
+              onPressed: hasNext ? onNext : null,
+              icon: const Icon(Icons.chevron_right_rounded),
+              label: const Text('Siguiente'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
