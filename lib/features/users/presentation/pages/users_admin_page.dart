@@ -54,6 +54,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
   final List<_PageCursor> _pageCursors = [const _PageCursor()];
 
   String _search = '';
+  String _draftSearch = '';
   bool _isSaving = false;
   bool _isLoadingUsers = true;
   bool _isSearching = false;
@@ -116,7 +117,8 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _searchController,
-                  onChanged: _onSearchChanged,
+                  onChanged: (value) => _draftSearch = value.trim(),
+                  onSubmitted: (_) => _applySearch(),
                   decoration: InputDecoration(
                     labelText:
                         'Buscar por nombre, correo, rol, tipo cliente, documento o estado',
@@ -130,6 +132,31 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                           ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _applySearch,
+                      icon: const Icon(Icons.search_rounded),
+                      label: const Text('Buscar'),
+                    ),
+                    if (_search.isNotEmpty || _draftSearch.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close_rounded),
+                        label: const Text('Limpiar'),
+                      ),
+                  ],
+                ),
+                if (_search.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Búsqueda aplicada: "$_search"',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Expanded(
                   child: _users.isEmpty
@@ -236,8 +263,9 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
     }
   }
 
-  void _onSearchChanged(String value) {
-    final normalized = value.trim();
+  void _applySearch() {
+    final normalized = _searchController.text.trim();
+    _draftSearch = normalized;
     if (normalized == _search) {
       return;
     }
@@ -247,7 +275,10 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
 
   void _clearSearch() {
     _searchController.clear();
-    setState(() => _search = '');
+    setState(() {
+      _search = '';
+      _draftSearch = '';
+    });
     _loadUsers(pageIndex: 0);
   }
 
