@@ -39,6 +39,7 @@ class _ConsumptionReportsAdminPageState
   bool _onlyIrregular = false;
   List<ConsumptionReading> _items = const [];
   List<Invoice> _pendingInvoices = const [];
+  Map<_InvoiceKey, Invoice> _invoicesByReading = const {};
 
   int get _pendingAmount {
     return _pendingInvoices.fold<int>(
@@ -56,6 +57,18 @@ class _ConsumptionReportsAdminPageState
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final highContrastTheme = baseTheme.copyWith(
+      textTheme: baseTheme.textTheme.apply(
+        bodyColor: Colors.black,
+        displayColor: Colors.black,
+      ),
+      inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+        labelStyle: const TextStyle(color: Colors.black),
+        floatingLabelStyle: const TextStyle(color: Colors.black),
+        hintStyle: const TextStyle(color: Colors.black87),
+      ),
+    );
     final compact = MediaQuery.sizeOf(context).width < 980;
     final readingsList = _items.isEmpty
         ? null
@@ -171,11 +184,15 @@ class _ConsumptionReportsAdminPageState
       child: pendingList,
     );
 
-    return Stack(
-      children: [
-        AbsorbPointer(
-          absorbing: _loading,
-          child: compact
+    return Theme(
+      data: highContrastTheme,
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(color: Colors.black),
+        child: Stack(
+        children: [
+          AbsorbPointer(
+            absorbing: _loading,
+            child: compact
               ? SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 24),
                   child: Column(
@@ -215,6 +232,7 @@ class _ConsumptionReportsAdminPageState
                           ),
                           FilterChip(
                             label: const Text('Solo irregularidades'),
+                            labelStyle: const TextStyle(color: Colors.black),
                             selected: _onlyIrregular,
                             onSelected: (value) {
                               setState(() => _onlyIrregular = value);
@@ -295,6 +313,7 @@ class _ConsumptionReportsAdminPageState
                         ),
                         FilterChip(
                           label: const Text('Solo irregularidades'),
+                          labelStyle: const TextStyle(color: Colors.black),
                           selected: _onlyIrregular,
                           onSelected: (value) {
                             setState(() => _onlyIrregular = value);
@@ -344,15 +363,17 @@ class _ConsumptionReportsAdminPageState
                     ),
                   ],
                 ),
-        ),
-        if (_loading)
-          Positioned.fill(
-            child: ColoredBox(
-              color: AppColors.textPrimary.withValues(alpha: 0.18),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
           ),
-      ],
+          if (_loading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: AppColors.textPrimary.withValues(alpha: 0.18),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
+        ],
+        ),
+      ),
     );
   }
 
@@ -361,23 +382,25 @@ class _ConsumptionReportsAdminPageState
     try {
       final period = _normalize(_periodController.text);
       final customerCode = _normalize(_customerController.text);
-      final results = await Future.wait([
-        _firestoreService.fetchReadingsReport(
-          period: period,
-          customerCode: customerCode,
-          onlyIrregular: _onlyIrregular,
-        ),
-        _invoiceService.fetchPendingInvoicesReport(
-          period: period,
-          customerCode: customerCode,
-        ),
-      ]);
+      final readingsFuture = _firestoreService.fetchReadingsReport(
+        period: period,
+        customerCode: customerCode,
+        onlyIrregular: _onlyIrregular,
+      );
+      final pendingInvoicesFuture = _invoiceService.fetchPendingInvoicesReport(
+        period: period,
+        customerCode: customerCode,
+      );
+      final readings = await readingsFuture;
+      final invoicesByReading = await _fetchInvoicesByReading(readings);
+      final pendingInvoices = await pendingInvoicesFuture;
       if (!mounted) {
         return;
       }
       setState(() {
-        _items = results[0] as List<ConsumptionReading>;
-        _pendingInvoices = results[1] as List<Invoice>;
+        _items = readings;
+        _invoicesByReading = invoicesByReading;
+        _pendingInvoices = pendingInvoices;
       });
     } finally {
       if (mounted) {
@@ -396,6 +419,9 @@ class _ConsumptionReportsAdminPageState
         'lectura_anterior',
         'lectura_actual',
         'consumo_calculado',
+        'saldo_anterior',
+        'valor_total_a_pagar',
+        'valor_pagado',
         'estado',
         'facturado',
         'pagado',
@@ -403,22 +429,7 @@ class _ConsumptionReportsAdminPageState
         'observaciones_operario',
         'observaciones_admin',
       ],
-      for (final item in _items)
-        [
-          item.periodoActual,
-          item.codigoUsuario,
-          item.nombreUsuario,
-          item.codigoContador,
-          '${item.lecturaAnterior ?? ''}',
-          '${item.lecturaActual}',
-          '${item.consumoCalculado ?? ''}',
-          item.estado,
-          item.facturado ? 'si' : 'no',
-          item.pagado ? 'si' : 'no',
-          item.irregularidad?.tipo ?? '',
-          item.observacionesOperario ?? '',
-          item.observacionesAdmin ?? '',
-        ],
+      for (final item in _items) _exportRowForReading(item),
     ];
     final csv = rows.map(_encodeCsvRow).join('\n');
     final filename = 'consumos_${_normalize(_periodController.text) ?? 'todos'}.csv';
@@ -442,6 +453,73 @@ class _ConsumptionReportsAdminPageState
   String _encodeCsvRow(List<String> row) {
     return row.map((item) => '"${item.replaceAll('"', '""')}"').join(',');
   }
+
+  List<String> _exportRowForReading(ConsumptionReading item) {
+    final invoice = _invoicesByReading[_InvoiceKey.fromReading(item)];
+    return [
+      item.periodoActual,
+      item.codigoUsuario,
+      item.nombreUsuario,
+      item.codigoContador,
+      '${item.lecturaAnterior ?? ''}',
+      '${item.lecturaActual}',
+      '${item.consumoCalculado ?? ''}',
+      invoice == null ? '' : '${invoice.saldoAnterior}',
+      invoice == null ? '' : '${_invoiceTotalToPay(invoice)}',
+      '${invoice?.valorPagado ?? 0}',
+      item.estado,
+      item.facturado ? 'si' : 'no',
+      item.pagado ? 'si' : 'no',
+      item.irregularidad?.tipo ?? '',
+      item.observacionesOperario ?? '',
+      item.observacionesAdmin ?? '',
+    ];
+  }
+
+  Future<Map<_InvoiceKey, Invoice>> _fetchInvoicesByReading(
+    List<ConsumptionReading> readings,
+  ) async {
+    final periods = readings.map((item) => item.periodoActual).toSet().toList();
+    final invoicesByReading = <_InvoiceKey, Invoice>{};
+    for (final period in periods) {
+      final invoices = await _invoiceService.fetchInvoicesForPeriod(period);
+      for (final invoice in invoices) {
+        invoicesByReading[_InvoiceKey.fromInvoice(invoice)] = invoice;
+      }
+    }
+    return invoicesByReading;
+  }
+}
+
+int _invoiceTotalToPay(Invoice invoice) {
+  return invoice.total + invoice.saldoAnterior + invoice.reconexion;
+}
+
+@immutable
+class _InvoiceKey {
+  const _InvoiceKey(this.period, this.meterCode);
+
+  factory _InvoiceKey.fromReading(ConsumptionReading reading) {
+    return _InvoiceKey(reading.periodoActual, reading.codigoContador);
+  }
+
+  factory _InvoiceKey.fromInvoice(Invoice invoice) {
+    return _InvoiceKey(invoice.periodo, invoice.codigoContador);
+  }
+
+  final String period;
+  final String meterCode;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is _InvoiceKey &&
+            other.period == period &&
+            other.meterCode == meterCode;
+  }
+
+  @override
+  int get hashCode => Object.hash(period, meterCode);
 }
 
 class _MetricCard extends StatelessWidget {
