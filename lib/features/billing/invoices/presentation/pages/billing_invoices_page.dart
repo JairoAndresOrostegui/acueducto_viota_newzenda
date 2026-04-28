@@ -163,11 +163,6 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       return;
     }
 
-    if (unpreparedReadings.isNotEmpty) {
-      _showUnpreparedReadings();
-      return;
-    }
-
     setState(() => _saving = true);
     try {
       final values = await _valueService.fetchActiveItem();
@@ -187,7 +182,11 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Se generaron ${billableReadings.length} recibos.'),
+          content: Text(
+            unpreparedReadings.isEmpty
+                ? 'Se generaron ${billableReadings.length} recibos.'
+                : 'Se generaron ${billableReadings.length} recibos. Omitidos por revisar: ${unpreparedReadings.length}.',
+          ),
         ),
       );
       await _loadPeriodData(period);
@@ -630,11 +629,18 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                 },
               );
 
-    return Stack(
-      children: [
-        AbsorbPointer(
-          absorbing: _saving,
-          child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pageWidth = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        return SizedBox(
+          width: pageWidth,
+          child: Stack(
+            children: [
+              AbsorbPointer(
+                absorbing: _saving,
+                child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _HeaderPanel(
@@ -701,16 +707,19 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                 child: invoicesList,
               ),
             ],
+                ),
+              ),
+              if (_saving)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: AppColors.textPrimary.withValues(alpha: 0.16),
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+            ],
           ),
-        ),
-        if (_saving)
-          Positioned.fill(
-            child: ColoredBox(
-              color: AppColors.textPrimary.withValues(alpha: 0.16),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-          ),
-      ],
+        );
+      },
     );
   }
 }
@@ -738,7 +747,8 @@ class _BillableReadingCard extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 760;
+          final compact =
+              !constraints.hasBoundedWidth || constraints.maxWidth < 760;
           final info = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -754,6 +764,11 @@ class _BillableReadingCard extends StatelessWidget {
           );
           final action = ElevatedButton.icon(
             onPressed: onGenerate,
+            style: ElevatedButton.styleFrom(
+              fixedSize: const Size(210, 48),
+              minimumSize: const Size(210, 48),
+              maximumSize: const Size(210, 48),
+            ),
             icon: const Icon(Icons.receipt_rounded),
             label: const Text('Generar individual'),
           );
@@ -808,7 +823,8 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
+          final compact =
+              !constraints.hasBoundedWidth || constraints.maxWidth < 760;
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -942,6 +958,11 @@ class _InvoicePreviewCard extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: OutlinedButton.icon(
               onPressed: onPrint,
+              style: OutlinedButton.styleFrom(
+                fixedSize: const Size(120, 44),
+                minimumSize: const Size(120, 44),
+                maximumSize: const Size(120, 44),
+              ),
               icon: const Icon(Icons.picture_as_pdf_rounded),
               label: const Text('PDF'),
             ),
@@ -1055,7 +1076,8 @@ class _HeaderPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 920;
+        final compact =
+            !constraints.hasBoundedWidth || constraints.maxWidth < 920;
         final periodValue = periods.contains(selectedPeriod)
             ? selectedPeriod
             : null;
@@ -1126,7 +1148,9 @@ class _HeaderPanel extends StatelessWidget {
                   ElevatedButton.icon(
                     onPressed: onGenerate,
                     style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
+                      fixedSize: const Size(190, 48),
+                      minimumSize: const Size(190, 48),
+                      maximumSize: const Size(190, 48),
                     ),
                     icon: const Icon(Icons.receipt_long_rounded),
                     label: const Text('Generar recibos'),
@@ -1134,7 +1158,9 @@ class _HeaderPanel extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onRegenerate,
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
+                      fixedSize: const Size(140, 48),
+                      minimumSize: const Size(140, 48),
+                      maximumSize: const Size(140, 48),
                     ),
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Regenerar'),
@@ -1142,7 +1168,9 @@ class _HeaderPanel extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onExportPeriod,
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
+                      fixedSize: const Size(150, 48),
+                      minimumSize: const Size(150, 48),
+                      maximumSize: const Size(150, 48),
                     ),
                     icon: const Icon(Icons.picture_as_pdf_rounded),
                     label: const Text('PDF periodo'),
@@ -1150,7 +1178,9 @@ class _HeaderPanel extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onExportSector,
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
+                      fixedSize: const Size(160, 48),
+                      minimumSize: const Size(160, 48),
+                      maximumSize: const Size(160, 48),
                     ),
                     icon: const Icon(Icons.filter_alt_rounded),
                     label: const Text('PDF por sector'),
@@ -1158,7 +1188,9 @@ class _HeaderPanel extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onShowUnprepared,
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 48),
+                      fixedSize: const Size(170, 48),
+                      minimumSize: const Size(170, 48),
+                      maximumSize: const Size(170, 48),
                     ),
                     icon: const Icon(Icons.playlist_add_check_circle_outlined),
                     label: const Text('No preparados'),
