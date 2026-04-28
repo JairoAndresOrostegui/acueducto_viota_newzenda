@@ -12,7 +12,7 @@ class UserAdminFunctionsService {
 
   Future<String> createManagedUser({
     required AppUser user,
-    required String password,
+    String? password,
   }) async {
     final callable = _client.httpsCallable('createManagedUser');
     final result = await callable.call({
@@ -57,5 +57,67 @@ class UserAdminFunctionsService {
   Future<void> deleteManagedUser(String uid) async {
     final callable = _client.httpsCallable('deleteManagedUser');
     await callable.call({'uid': uid});
+  }
+
+  Future<UserImportSummary> importMigratedUsers(
+    List<Map<String, String>> rows,
+  ) async {
+    final callable = _client.httpsCallable(
+      'importMigratedUsers',
+      options: HttpsCallableOptions(timeout: const Duration(minutes: 30)),
+    );
+    final result = await callable.call({'rows': rows});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return UserImportSummary.fromMap(data);
+  }
+}
+
+class UserImportSummary {
+  const UserImportSummary({
+    required this.imported,
+    required this.failed,
+    required this.results,
+  });
+
+  final int imported;
+  final int failed;
+  final List<UserImportRowResult> results;
+
+  factory UserImportSummary.fromMap(Map<String, dynamic> data) {
+    final rawResults = data['results'] as List<dynamic>? ?? const [];
+    return UserImportSummary(
+      imported: data['imported'] as int? ?? 0,
+      failed: data['failed'] as int? ?? 0,
+      results: rawResults
+          .map(
+            (item) => UserImportRowResult.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class UserImportRowResult {
+  const UserImportRowResult({
+    required this.rowNumber,
+    required this.ok,
+    this.codigoUsuario,
+    this.message,
+  });
+
+  final int rowNumber;
+  final bool ok;
+  final String? codigoUsuario;
+  final String? message;
+
+  factory UserImportRowResult.fromMap(Map<String, dynamic> data) {
+    return UserImportRowResult(
+      rowNumber: data['rowNumber'] as int? ?? 0,
+      ok: data['ok'] == true,
+      codigoUsuario: data['codigoUsuario'] as String?,
+      message: data['message'] as String?,
+    );
   }
 }

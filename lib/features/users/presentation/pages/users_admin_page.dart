@@ -58,15 +58,20 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
   bool _isSaving = false;
   bool _isLoadingUsers = true;
   bool _isSearching = false;
+  bool _isPendingView = false;
   String? _loadError;
   int _currentPageIndex = 0;
   bool _hasNextPage = false;
+  int _activeCount = 0;
+  int _clientCount = 0;
+  int _pendingCount = 0;
   List<AppUser> _users = const [];
 
   @override
   void initState() {
     super.initState();
     _loadUsers();
+    _loadUserMetrics();
   }
 
   @override
@@ -104,16 +109,41 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                     ),
                     _MetricCard(
                       label: 'Activos',
-                      value: '${_users.where((u) => u.estado == 'activo').length}',
+                      value: '$_activeCount',
                       color: AppColors.brandGreenSoft,
                     ),
                     _MetricCard(
                       label: 'Clientes',
-                      value: '${_users.where((u) => u.rol == 'cliente').length}',
+                      value: '$_clientCount',
                       color: AppColors.brandGreenSoft,
+                    ),
+                    _MetricCard(
+                      label: 'Pendientes',
+                      value: '${_isPendingView ? _users.length : _pendingCount}',
+                      color: AppColors.brandBlueSoft,
+                      isSelected: _isPendingView,
+                      onTap: _showPendingUsers,
                     ),
                   ],
                 ),
+                if (_isPendingView) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Usuarios pendientes por completar correo, cédula y celular.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _clearPendingView,
+                        icon: const Icon(Icons.close_rounded),
+                        label: const Text('Cerrar pendientes'),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TextField(
                   controller: _searchController,
@@ -178,9 +208,10 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                 const SizedBox(height: 16),
                 _PaginationBar(
                   currentPage: _currentPageIndex + 1,
-                  isSearching: _isSearching,
-                  hasPrevious: !_isSearching && _currentPageIndex > 0,
-                  hasNext: !_isSearching && _hasNextPage,
+                  isSearching: _isSearching || _isPendingView,
+                  hasPrevious:
+                      !_isSearching && !_isPendingView && _currentPageIndex > 0,
+                  hasNext: !_isSearching && !_isPendingView && _hasNextPage,
                   onPrevious: _previousPage,
                   onNext: _nextPage,
                 ),
@@ -263,13 +294,37 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
     }
   }
 
+  Future<void> _loadUserMetrics() async {
+    try {
+      final allUsers = await _userService.fetchAllUsers();
+      final activeCount =
+          allUsers.where((user) => user.estado == 'activo').length;
+      final clientCount =
+          allUsers.where((user) => user.rol == 'cliente').length;
+      final pendingCount = allUsers.where(_hasIncompleteProfile).length;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeCount = activeCount;
+        _clientCount = clientCount;
+        _pendingCount = pendingCount;
+      });
+    } catch (_) {
+      // The main user list already reports load errors; keep this badge passive.
+    }
+  }
+
   void _applySearch() {
     final normalized = _searchController.text.trim();
     _draftSearch = normalized;
     if (normalized == _search) {
       return;
     }
-    setState(() => _search = normalized);
+    setState(() {
+      _search = normalized;
+      _isPendingView = false;
+    });
     _loadUsers(pageIndex: 0);
   }
 
@@ -278,7 +333,58 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
     setState(() {
       _search = '';
       _draftSearch = '';
+      _isPendingView = false;
     });
+    _loadUsers(pageIndex: 0);
+  }
+
+  Future<void> _showPendingUsers() async {
+    if (_isLoadingUsers) {
+      return;
+    }
+    setState(() {
+      _isLoadingUsers = true;
+      _loadError = null;
+      _isPendingView = true;
+      _isSearching = false;
+      _search = '';
+      _draftSearch = '';
+    });
+    _searchController.clear();
+
+    try {
+      final allUsers = await _userService.fetchAllUsers();
+      final pendingUsers = allUsers.where(_hasIncompleteProfile).toList();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingUsers = false;
+        _users = pendingUsers;
+        _pendingCount = pendingUsers.length;
+        _activeCount =
+            allUsers.where((user) => user.estado == 'activo').length;
+        _clientCount =
+            allUsers.where((user) => user.rol == 'cliente').length;
+        _currentPageIndex = 0;
+        _hasNextPage = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingUsers = false;
+        _loadError = error.toString();
+      });
+    }
+  }
+
+  void _clearPendingView() {
+    if (!_isPendingView) {
+      return;
+    }
+    setState(() => _isPendingView = false);
     _loadUsers(pageIndex: 0);
   }
 
@@ -308,8 +414,21 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
         user.estado.toLowerCase().contains(q) ||
         user.numeroDocumento.toLowerCase().contains(q) ||
         user.tipoDocumento.toLowerCase().contains(q) ||
+        user.codigoUsuario.toLowerCase().contains(q) ||
         user.numeroContador.join(' ').toLowerCase().contains(q) ||
         user.sector.toLowerCase().contains(q);
+  }
+
+  bool _hasIncompleteProfile(AppUser user) {
+    return user.rol == 'cliente' &&
+        (_isMissingProfileValue(user.correo) ||
+            _isMissingProfileValue(user.numeroDocumento) ||
+            _isMissingProfileValue(user.numeroContacto));
+  }
+
+  bool _isMissingProfileValue(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized.isEmpty || normalized == 'na' || normalized == 'null';
   }
 
   Future<void> _openForm({AppUser? user}) async {
@@ -340,7 +459,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       if (user == null) {
         await _adminFunctionsService.createManagedUser(
           user: result.user,
-          password: result.password!,
+          password: result.password,
         );
       } else {
         await _adminFunctionsService.updateManagedUser(
@@ -361,7 +480,12 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
           ),
         ),
       );
-      await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
+      if (_isPendingView) {
+        await _showPendingUsers();
+      } else {
+        await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
+        await _loadUserMetrics();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -423,7 +547,12 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       if (!mounted) {
         return;
       }
-      await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
+      if (_isPendingView) {
+        await _showPendingUsers();
+      } else {
+        await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
+        await _loadUserMetrics();
+      }
       if (!mounted) {
         return;
       }
@@ -481,7 +610,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       TextEditingController(
         text: widget.user == null || widget.user!.numeroContador.isEmpty
             ? ''
-            : widget.user!.numeroContador.join('\n'),
+            : widget.user!.numeroContador.first,
       );
   late final TextEditingController _correoController =
       TextEditingController(text: widget.user?.correo ?? '');
@@ -496,8 +625,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool get _isEditing => widget.user != null;
   bool get _isClient => _rol == 'cliente';
 
-  List<TextInputFormatter> get _digitsOnlyInputFormatters => [
-        FilteringTextInputFormatter.digitsOnly,
+  List<TextInputFormatter> get _codeInputFormatters => [
+        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
       ];
 
   @override
@@ -581,30 +710,32 @@ class _UserFormDialogState extends State<UserFormDialog> {
                           _FieldBox(width: width, child: _selectRole()),
                           _FieldBox(width: width, child: _selectClientType()),
                           _FieldBox(width: width, child: _selectState()),
-                          _FieldBox(
-                            width: width * 2 + 16,
-                            child: _password(),
-                          ),
+                          if (!_isClient)
+                            _FieldBox(
+                              width: width * 2 + 16,
+                              child: _password(),
+                            ),
                           _FieldBox(
                             width: width,
                             child: _text(
                               _codigoUsuarioController,
                               'Código usuario',
                               enabled: _isClient,
-                              validator: _isClient ? _numericRequired : null,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: _digitsOnlyInputFormatters,
+                              validator: _isClient ? _codeRequired : null,
+                              textCapitalization: TextCapitalization.characters,
+                              inputFormatters: _codeInputFormatters,
                             ),
                           ),
                           _FieldBox(
                             width: width,
                             child: _text(
                               _numeroContadorController,
-                              'Códigos contador',
+                              'Código contador',
                               enabled: _isClient,
                               validator:
                                   _isClient ? _meterNumbersValidator : null,
-                              keyboardType: TextInputType.multiline,
+                              textCapitalization: TextCapitalization.characters,
+                              inputFormatters: _codeInputFormatters,
                             ),
                           ),
                           _FieldBox(width: width, child: _selectSector()),
@@ -656,12 +787,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
     bool enabled = true,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
+    TextCapitalization textCapitalization = TextCapitalization.none,
     List<TextInputFormatter>? inputFormatters,
   }) {
     return TextFormField(
       controller: controller,
       enabled: enabled,
       keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
       inputFormatters: inputFormatters,
       decoration: InputDecoration(labelText: label),
       validator: validator ?? _required,
@@ -673,14 +806,16 @@ class _UserFormDialogState extends State<UserFormDialog> {
       controller: _passwordController,
       obscureText: true,
       decoration: InputDecoration(
-        labelText: _isEditing ? 'Nueva clave (opcional)' : 'Clave temporal',
+        labelText: _isEditing || _isClient
+            ? 'Nueva clave (opcional)'
+            : 'Clave temporal',
       ),
       validator: (value) {
         final text = value?.trim() ?? '';
-        if (!_isEditing && text.length < 8) {
+        if (!_isEditing && !_isClient && text.length < 8) {
           return 'La clave debe tener al menos 8 caracteres.';
         }
-        if (_isEditing && text.isNotEmpty && text.length < 8) {
+        if (text.isNotEmpty && text.length < 8) {
           return 'La clave debe tener al menos 8 caracteres.';
         }
         return null;
@@ -876,13 +1011,13 @@ class _UserFormDialogState extends State<UserFormDialog> {
     return null;
   }
 
-  String? _numericRequired(String? value) {
+  String? _codeRequired(String? value) {
     final base = _required(value);
     if (base != null) {
       return base;
     }
-    if (!RegExp(r'^\d+$').hasMatch(value!.trim())) {
-      return 'Solo se permiten números.';
+    if (!RegExp(r'^[a-zA-Z0-9]+$').hasMatch(value!.trim())) {
+      return 'Solo se permiten letras y numeros.';
     }
     return null;
   }
@@ -894,13 +1029,13 @@ class _UserFormDialogState extends State<UserFormDialog> {
     }
     final items = _parseMeterNumbers(value ?? '');
     if (items.isEmpty) {
-      return 'Ingresa al menos un contador.';
+      return 'Ingresa el contador.';
     }
-    if (items.any((item) => !RegExp(r'^\d+$').hasMatch(item))) {
-      return 'Cada contador debe contener solo números.';
+    if (items.any((item) => !RegExp(r'^[a-zA-Z0-9]+$').hasMatch(item))) {
+      return 'El contador debe contener solo letras y numeros.';
     }
-    if (items.toSet().length != items.length) {
-      return 'No repitas contadores dentro del mismo usuario.';
+    if (items.length != 1) {
+      return 'Ingresa un solo contador.';
     }
     return null;
   }
@@ -997,7 +1132,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
       tipoDocumento: _tipoDocumento!,
       numeroDocumento: _numeroDocumentoController.text.trim(),
       numeroContacto: _numeroContactoController.text.trim(),
-      codigoUsuario: _isClient ? _codigoUsuarioController.text.trim() : 'na',
+      codigoUsuario:
+          _isClient ? _codigoUsuarioController.text.trim().toUpperCase() : 'na',
       numeroContador: _isClient
           ? _parseMeterNumbers(_numeroContadorController.text)
           : const [],
@@ -1022,8 +1158,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
   List<String> _parseMeterNumbers(String value) {
     return value
-        .split(RegExp(r'[\n,;]+'))
-        .map((item) => item.trim())
+        .split(RegExp(r'[\s,;]+'))
+        .map((item) => item.trim().toUpperCase())
         .where((item) => item.isNotEmpty && item.toLowerCase() != 'na')
         .toList();
   }
@@ -1221,28 +1357,42 @@ class _MetricCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
+    this.isSelected = false,
   });
 
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: color,
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8),
-          Text(value, style: Theme.of(context).textTheme.headlineMedium),
-        ],
+        child: Container(
+          width: 220,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: isSelected
+                ? Border.all(color: AppColors.brandBlue, width: 2)
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              Text(value, style: Theme.of(context).textTheme.headlineMedium),
+            ],
+          ),
+        ),
       ),
     );
   }

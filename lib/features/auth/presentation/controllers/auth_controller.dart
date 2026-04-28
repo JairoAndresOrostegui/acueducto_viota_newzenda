@@ -42,19 +42,63 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> login({
-    required String identifier,
+  Future<bool> loginWithEmailAndPassword({
+    required String email,
     required String password,
+  }) {
+    return _login(
+      () => _authService.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+        rememberSession: _rememberSession,
+      ),
+    );
+  }
+
+  Future<ClientCodeLoginResult> loginWithClientCode({
+    String? email,
+    required String clientCode,
+    String? documentNumber,
+    String? contactNumber,
   }) async {
     _setLoading(true);
     _errorMessage = null;
 
     try {
-      await _authService.signIn(
-        email: identifier,
-        password: password,
+      final result = await _authService.signInWithClientCode(
+        email: email,
+        clientCode: clientCode,
+        documentNumber: documentNumber,
+        contactNumber: contactNumber,
         rememberSession: _rememberSession,
       );
+      if (result.requiresProfileCompletion) {
+        return const ClientCodeLoginResult(requiresProfileCompletion: true);
+      }
+      _currentUser = _authService.currentUser;
+      _isAuthenticated = _currentUser != null;
+      return ClientCodeLoginResult(success: _isAuthenticated);
+    } on AuthException catch (error) {
+      _errorMessage = error.message;
+      _isAuthenticated = false;
+      return const ClientCodeLoginResult(success: false);
+    } catch (_) {
+      _errorMessage =
+          'No fue posible iniciar sesión en este momento. Intenta de nuevo.';
+      _isAuthenticated = false;
+      return const ClientCodeLoginResult(success: false);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _login(Future<void> Function() signIn) async {
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      await signIn();
       _currentUser = _authService.currentUser;
       _isAuthenticated = _currentUser != null;
       return _isAuthenticated;
@@ -104,4 +148,14 @@ class AuthController extends ChangeNotifier {
     _authSubscription.cancel();
     super.dispose();
   }
+}
+
+class ClientCodeLoginResult {
+  const ClientCodeLoginResult({
+    this.success = false,
+    this.requiresProfileCompletion = false,
+  });
+
+  final bool success;
+  final bool requiresProfileCompletion;
 }

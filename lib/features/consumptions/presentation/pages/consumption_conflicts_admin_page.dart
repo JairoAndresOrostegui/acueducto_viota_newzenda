@@ -590,7 +590,6 @@ class _ResolutionOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Opacity(
       opacity: enabled ? 1 : 0.45,
-      // TODO: migrate to RadioGroup once the surrounding dialog is refactored.
       child: RadioListTile<String>(
         value: value,
         groupValue: groupValue,

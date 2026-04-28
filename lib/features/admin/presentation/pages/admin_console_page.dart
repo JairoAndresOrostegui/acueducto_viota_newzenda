@@ -6,6 +6,7 @@ import 'package:frontacueductonewzenda/features/billing/periods/presentation/pag
 import 'package:frontacueductonewzenda/features/billing/values/presentation/pages/billing_values_admin_page.dart';
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_conflicts_admin_page.dart';
+import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_import_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_payments_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_reports_admin_page.dart';
@@ -18,6 +19,7 @@ import '../../../users/data/user_firestore_service.dart';
 import '../../../users/domain/app_user.dart';
 import '../../../users/presentation/pages/user_logs_page.dart';
 import '../../../users/presentation/pages/users_admin_page.dart';
+import '../../../users/presentation/pages/users_import_page.dart';
 
 class AdminConsolePage extends StatefulWidget {
   const AdminConsolePage({
@@ -77,6 +79,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                 _AdminGroupSection(
                   tabs: const [
                     Tab(text: 'Usuarios'),
+                    Tab(text: 'Importar usuarios'),
                     Tab(text: 'Tipos documento'),
                     Tab(text: 'Roles'),
                     Tab(text: 'Sectores'),
@@ -90,6 +93,9 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                       documentTypeService: widget.documentTypeService,
                       roleService: widget.roleService,
                       sectorService: widget.sectorService,
+                    ),
+                    UsersImportPage(
+                      adminFunctionsService: widget.userAdminFunctionsService,
                     ),
                     CatalogAdminPage(
                       title: 'Tipos de documento',
@@ -131,6 +137,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                   tabs: const [
                     Tab(text: 'Conflictos'),
                     Tab(text: 'Registrar consumos'),
+                    Tab(text: 'Importar consumos'),
                     Tab(text: 'Reportes'),
                     Tab(text: 'Registrar pagos'),
                   ],
@@ -141,6 +148,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
                     ConsumptionRegisterPage(
                       currentUser: widget.currentUser,
                     ),
+                    const ConsumptionImportPage(),
                     const ConsumptionReportsAdminPage(),
                     const ConsumptionPaymentsPage(),
                   ],

@@ -38,8 +38,7 @@ void main() {
     await tester.tap(find.text('Ingresar'));
     await tester.pump();
 
-    expect(find.text('Ingresa el usuario de acceso.'), findsOneWidget);
-    expect(find.text('Ingresa la clave.'), findsOneWidget);
+    expect(find.text('Ingresa el código de usuario.'), findsOneWidget);
   });
 
   testWidgets('allows login with a valid auth service user', (tester) async {
@@ -59,6 +58,9 @@ void main() {
         userAuditLogService: FakeUserAuditLogService(),
       ),
     );
+
+    await tester.tap(find.text('Administrativo'));
+    await tester.pump();
 
     await tester.enterText(
       find.byType(TextFormField).at(0),
@@ -91,7 +93,7 @@ class FakeAuthService implements AuthService {
   AuthUser? get currentUser => _currentUser;
 
   @override
-  Future<void> signIn({
+  Future<void> signInWithEmailAndPassword({
     required String email,
     required String password,
     required bool rememberSession,
@@ -104,6 +106,27 @@ class FakeAuthService implements AuthService {
       );
       _controller.add(_currentUser);
       return;
+    }
+
+    throw const AuthException('Credenciales invalidas');
+  }
+
+  @override
+  Future<ClientCodeSignInResult> signInWithClientCode({
+    String? email,
+    required String clientCode,
+    String? documentNumber,
+    String? contactNumber,
+    required bool rememberSession,
+  }) async {
+    if (clientCode == '1001') {
+      _currentUser = AuthUser(
+        uid: 'test-user',
+        email: email ?? '',
+        displayName: 'Cliente',
+      );
+      _controller.add(_currentUser);
+      return const ClientCodeSignInResult(requiresProfileCompletion: false);
     }
 
     throw const AuthException('Credenciales invalidas');
@@ -162,7 +185,7 @@ class FakeUserAdminFunctionsService extends UserAdminFunctionsService {
   @override
   Future<String> createManagedUser({
     required AppUser user,
-    required String password,
+    String? password,
   }) async {
     return 'created-user';
   }

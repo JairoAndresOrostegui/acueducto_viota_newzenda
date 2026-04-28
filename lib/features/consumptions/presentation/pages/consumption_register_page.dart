@@ -59,6 +59,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _isBusy = false;
+  bool _showPendingReadings = false;
   String _query = '';
   String? _workingPeriod;
   List<ConsumptionCustomer> _customers = const [];
@@ -79,6 +80,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   @override
   Widget build(BuildContext context) {
     final filteredCustomers = _filteredCustomers();
+    final filteredPendingCustomers = _filteredPendingCustomers();
     final periodReadings = _readings
         .where((item) => item.periodoActual == _workingPeriod)
         .toList();
@@ -88,7 +90,11 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         .length;
     final blockedCount = periodReadings.where((item) => item.isBlocked).length;
     final irregularCount = periodReadings.where((item) => item.hasIrregularity).length;
-    final customerList = filteredCustomers.isEmpty
+    final missingReadingsCount = _pendingCustomersWithoutReading().length;
+    final listIsEmpty = _showPendingReadings
+        ? filteredPendingCustomers.isEmpty
+        : filteredCustomers.isEmpty;
+    final customerList = listIsEmpty
         ? const Center(
             child: Text(
               'No hay clientes descargados o no coinciden con la busqueda.',
@@ -99,9 +105,21 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
             physics: compact
                 ? const NeverScrollableScrollPhysics()
                 : const AlwaysScrollableScrollPhysics(),
-            itemCount: filteredCustomers.length,
+            itemCount: _showPendingReadings
+                ? filteredPendingCustomers.length
+                : filteredCustomers.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
+              if (_showPendingReadings) {
+                final customer = filteredPendingCustomers[index];
+                return _PendingReadingRow(
+                  customer: customer,
+                  previousReading: _previousReadingFor(
+                    customer.codigoContador,
+                    beforePeriod: _workingPeriod,
+                  ),
+                );
+              }
               final customer = filteredCustomers[index];
               final reading = _readingFor(
                 customer.codigoContador,
@@ -141,8 +159,11 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                         pendingCount: pendingCount,
                         blockedCount: blockedCount,
                         irregularCount: irregularCount,
+                        missingReadingsCount: missingReadingsCount,
+                        showPendingReadings: _showPendingReadings,
                         onDownloadPeriod: _downloadWorkingPeriod,
                         onUploadReadings: _uploadPendingReadings,
+                        onTogglePendingReadings: _togglePendingReadings,
                       ),
                       const SizedBox(height: 20),
                       TextField(
@@ -167,8 +188,11 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                       pendingCount: pendingCount,
                       blockedCount: blockedCount,
                       irregularCount: irregularCount,
+                      missingReadingsCount: missingReadingsCount,
+                      showPendingReadings: _showPendingReadings,
                       onDownloadPeriod: _downloadWorkingPeriod,
                       onUploadReadings: _uploadPendingReadings,
+                      onTogglePendingReadings: _togglePendingReadings,
                     ),
                     const SizedBox(height: 20),
                     TextField(
@@ -215,6 +239,36 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       return _customers;
     }
     return _customers.where((item) => item.searchText.contains(query)).toList();
+  }
+
+  List<ConsumptionCustomer> _filteredPendingCustomers() {
+    final pending = _pendingCustomersWithoutReading();
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return pending;
+    }
+    return pending.where((item) => item.searchText.contains(query)).toList();
+  }
+
+  List<ConsumptionCustomer> _pendingCustomersWithoutReading() {
+    final period = _workingPeriod;
+    if (period == null) {
+      return const [];
+    }
+    return _customers
+        .where((customer) => _readingFor(customer.codigoContador, period) == null)
+        .toList();
+  }
+
+  void _togglePendingReadings() {
+    if (_workingPeriod == null) {
+      _showInfoDialog(
+        title: 'Sin periodo de trabajo',
+        message: 'Descarga primero el periodo vigente para revisar lecturas pendientes.',
+      );
+      return;
+    }
+    setState(() => _showPendingReadings = !_showPendingReadings);
   }
 
   ConsumptionReading? _readingFor(String meterCode, String? period) {
@@ -288,6 +342,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         _workingPeriod = activePeriod.clave;
         _customers = customerCache;
         _readings = mergedReadings;
+        _showPendingReadings = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -574,8 +629,11 @@ class _Header extends StatelessWidget {
     required this.pendingCount,
     required this.blockedCount,
     required this.irregularCount,
+    required this.missingReadingsCount,
+    required this.showPendingReadings,
     required this.onDownloadPeriod,
     required this.onUploadReadings,
+    required this.onTogglePendingReadings,
   });
 
   final String? workingPeriod;
@@ -583,8 +641,11 @@ class _Header extends StatelessWidget {
   final int pendingCount;
   final int blockedCount;
   final int irregularCount;
+  final int missingReadingsCount;
+  final bool showPendingReadings;
   final VoidCallback onDownloadPeriod;
   final VoidCallback onUploadReadings;
+  final VoidCallback onTogglePendingReadings;
 
   @override
   Widget build(BuildContext context) {
@@ -605,7 +666,7 @@ class _Header extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Período de trabajo: ${workingPeriod ?? 'Sin descargar'} - Clientes: $cachedClients - Pendientes: $pendingCount - Bloqueados: $blockedCount - Irregularidades: $irregularCount',
+              'Período de trabajo: ${workingPeriod ?? 'Sin descargar'} - Clientes: $cachedClients - Pendientes por subir: $pendingCount - Sin lectura: $missingReadingsCount - Bloqueados: $blockedCount - Irregularidades: $irregularCount',
             ),
           ],
         );
@@ -625,6 +686,20 @@ class _Header extends StatelessWidget {
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
               icon: const Icon(Icons.cloud_upload_rounded),
               label: const Text('Subir lecturas'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onTogglePendingReadings,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+              icon: Icon(
+                showPendingReadings
+                    ? Icons.list_alt_rounded
+                    : Icons.pending_actions_rounded,
+              ),
+              label: Text(
+                showPendingReadings
+                    ? 'Ver todos'
+                    : 'Lecturas pendientes ($missingReadingsCount)',
+              ),
             ),
           ],
         );
@@ -648,6 +723,95 @@ class _Header extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _PendingReadingRow extends StatelessWidget {
+  const _PendingReadingRow({
+    required this.customer,
+    required this.previousReading,
+  });
+
+  final ConsumptionCustomer customer;
+  final ConsumptionReading? previousReading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          final values = [
+            _PendingValue(
+              label: 'Código usuario',
+              value: customer.codigoUsuario,
+            ),
+            _PendingValue(
+              label: 'Código contador',
+              value: customer.codigoContador,
+            ),
+            _PendingValue(
+              label: 'Lectura anterior',
+              value: previousReading == null
+                  ? 'Sin histórico'
+                  : '${previousReading!.lecturaActual}',
+            ),
+            _PendingValue(
+              label: 'Nombre',
+              value: toDisplayUserName(customer.nombreUsuario),
+            ),
+          ];
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: values
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: item,
+                    ),
+                  )
+                  .toList(),
+            );
+          }
+
+          return Row(
+            children: values
+                .map((item) => Expanded(child: item))
+                .toList(growable: false),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PendingValue extends StatelessWidget {
+  const _PendingValue({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 2),
+        Text(value, overflow: TextOverflow.ellipsis),
+      ],
     );
   }
 }
