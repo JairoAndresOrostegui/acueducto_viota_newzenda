@@ -157,11 +157,13 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
   Future<void> _generateInvoices() async {
     final period = _selectedPeriod;
-    if (period == null || _billableReadings.isEmpty) {
+    final billableReadings = _billableReadings;
+    final unpreparedReadings = _unpreparedReadings;
+    if (period == null || billableReadings.isEmpty) {
       return;
     }
 
-    if (_unpreparedReadings.isNotEmpty) {
+    if (unpreparedReadings.isNotEmpty) {
       _showUnpreparedReadings();
       return;
     }
@@ -175,7 +177,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       final paymentMethods = await _paymentMethodService.fetchItems();
       await _invoiceService.generateInvoicesForReadings(
         period: period,
-        readings: _billableReadings,
+        readings: billableReadings,
         values: values,
         paymentMethods: paymentMethods,
         actor: widget.currentUser,
@@ -185,7 +187,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Se generaron ${_billableReadings.length} recibos.'),
+          content: Text('Se generaron ${billableReadings.length} recibos.'),
         ),
       );
       await _loadPeriodData(period);
@@ -596,38 +598,34 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 900;
+    final billableReadings = _billableReadings;
+    final unpreparedReadings = _unpreparedReadings;
+    final availableSectors = _availableSectors;
+    final filteredInvoices = _filteredInvoices;
+    final totalItems = billableReadings.length + filteredInvoices.length;
     final invoicesList = _loading
         ? const Center(child: CircularProgressIndicator())
-        : _billableReadings.isEmpty && _invoices.isEmpty
+        : billableReadings.isEmpty && _invoices.isEmpty
             ? const Center(
                 child: Text(
                   'No hay recibos generados para este periodo.',
                 ),
               )
             : ListView.separated(
-                shrinkWrap: compact,
-                physics: compact
-                    ? const NeverScrollableScrollPhysics()
-                    : const AlwaysScrollableScrollPhysics(),
-                itemCount:
-                    _billableReadings.length + _filteredInvoices.length,
+                itemCount: totalItems,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  if (index < _billableReadings.length) {
+                  if (index < billableReadings.length) {
+                    final reading = billableReadings[index];
                     return _BillableReadingCard(
-                      reading: _billableReadings[index],
-                      onGenerate: () => _generateInvoiceForReading(
-                        _billableReadings[index],
-                      ),
+                      reading: reading,
+                      onGenerate: () => _generateInvoiceForReading(reading),
                     );
                   }
+                  final invoice = filteredInvoices[index - billableReadings.length];
                   return _InvoicePreviewCard(
-                    invoice:
-                        _filteredInvoices[index - _billableReadings.length],
-                    onPrint: () => _printInvoice(
-                      _filteredInvoices[index - _billableReadings.length],
-                    ),
+                    invoice: invoice,
+                    onPrint: () => _printInvoice(invoice),
                   );
                 },
               );
@@ -636,113 +634,37 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       children: [
         AbsorbPointer(
           absorbing: _saving,
-          child: compact
-              ? SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _HeaderPanel(
-                        periods: _periods,
-                        selectedPeriod: _selectedPeriod,
-                        billableCount: _billableReadings.length,
-                        invoiceCount: _invoices.length,
-                        unpreparedCount: _unpreparedReadings.length,
-                        onPeriodChanged: (period) {
-                          if (period != null) {
-                            _loadPeriodData(period);
-                          }
-                        },
-                        onGenerate: _billableReadings.isEmpty || _saving
-                            ? null
-                            : _generateInvoices,
-                        onRegenerate: _invoices.isEmpty || _saving
-                            ? null
-                            : _regenerateInvoices,
-                        onExportPeriod: _invoices.isEmpty || _saving
-                            ? null
-                            : _exportPeriodInvoicesUnified,
-                        onExportSector:
-                            _invoices.isEmpty ||
-                                    _availableSectors.isEmpty ||
-                                    _saving
-                                ? null
-                                : _exportSectorInvoicesUnified,
-                        onShowUnprepared: _unpreparedReadings.isEmpty
-                            ? null
-                            : _showUnpreparedReadings,
-                      ),
-                      const SizedBox(height: 16),
-                      if (_availableSectors.isNotEmpty) ...[
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            ChoiceChip(
-                              label: const Text('Todos los sectores'),
-                              selected: _selectedSectorFilter == null,
-                              onSelected: (_) {
-                                setState(() => _selectedSectorFilter = null);
-                              },
-                            ),
-                            ..._availableSectors.map(
-                              (sector) => ChoiceChip(
-                                label: Text(sector),
-                                selected: _selectedSectorFilter == sector,
-                                onSelected: (_) {
-                                  setState(() => _selectedSectorFilter = sector);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            _error!,
-                            style: TextStyle(color: Colors.red.shade800),
-                          ),
-                        ),
-                      invoicesList,
-                    ],
-                  ),
-                )
-              : Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _HeaderPanel(
                 periods: _periods,
                 selectedPeriod: _selectedPeriod,
-                billableCount: _billableReadings.length,
+                billableCount: billableReadings.length,
                 invoiceCount: _invoices.length,
-                unpreparedCount: _unpreparedReadings.length,
+                unpreparedCount: unpreparedReadings.length,
                 onPeriodChanged: (period) {
                   if (period != null) {
                     _loadPeriodData(period);
                   }
                 },
-                onGenerate: _billableReadings.isEmpty || _saving
-                    ? null
-                    : _generateInvoices,
+                onGenerate:
+                    billableReadings.isEmpty || _saving ? null : _generateInvoices,
                 onRegenerate: _invoices.isEmpty || _saving
                     ? null
                     : _regenerateInvoices,
                 onExportPeriod: _invoices.isEmpty || _saving
                     ? null
                     : _exportPeriodInvoicesUnified,
-                onExportSector:
-                    _invoices.isEmpty || _availableSectors.isEmpty || _saving
+                onExportSector: _invoices.isEmpty || availableSectors.isEmpty || _saving
                     ? null
                     : _exportSectorInvoicesUnified,
-                onShowUnprepared: _unpreparedReadings.isEmpty
+                onShowUnprepared: unpreparedReadings.isEmpty
                     ? null
                     : _showUnpreparedReadings,
               ),
               const SizedBox(height: 16),
-              if (_availableSectors.isNotEmpty) ...[
+              if (availableSectors.isNotEmpty) ...[
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -754,7 +676,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                         setState(() => _selectedSectorFilter = null);
                       },
                     ),
-                    ..._availableSectors.map(
+                    ...availableSectors.map(
                       (sector) => ChoiceChip(
                         label: Text(sector),
                         selected: _selectedSectorFilter == sector,
@@ -776,36 +698,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                   ),
                 ),
               Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _billableReadings.isEmpty && _invoices.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No hay recibos generados para este periodo.',
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount:
-                                _billableReadings.length + _filteredInvoices.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, index) {
-                              if (index < _billableReadings.length) {
-                                return _BillableReadingCard(
-                                  reading: _billableReadings[index],
-                                  onGenerate: () => _generateInvoiceForReading(
-                                    _billableReadings[index],
-                                  ),
-                                );
-                              }
-                              return _InvoicePreviewCard(
-                                invoice: _filteredInvoices[index - _billableReadings.length],
-                                onPrint: () => _printInvoice(
-                                  _filteredInvoices[index - _billableReadings.length],
-                                ),
-                              );
-                            },
-                          ),
+                child: invoicesList,
               ),
             ],
           ),
@@ -1163,6 +1056,9 @@ class _HeaderPanel extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 920;
+        final periodValue = periods.contains(selectedPeriod)
+            ? selectedPeriod
+            : null;
 
         final overviewCard = Container(
           padding: const EdgeInsets.all(20),
@@ -1208,7 +1104,7 @@ class _HeaderPanel extends StatelessWidget {
               const SizedBox(height: 12),
               DropdownButtonFormField<BillingPeriod>(
                 isExpanded: true,
-                initialValue: selectedPeriod,
+                initialValue: periodValue,
                 decoration: const InputDecoration(
                   hintText: 'Selecciona un periodo',
                 ),
