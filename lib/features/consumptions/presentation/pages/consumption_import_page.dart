@@ -2,9 +2,10 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:excel/excel.dart' as xls;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/platform/excel_file_picker_stub.dart'
+    if (dart.library.html) '../../../../core/platform/excel_file_picker_web.dart';
 import '../../../../theme/app_colors.dart';
 import '../../data/consumption_import_functions_service.dart';
 import 'consumption_import_file_exporter_stub.dart'
@@ -143,15 +144,11 @@ class _ConsumptionImportPageState extends State<ConsumptionImportPage> {
       _summary = null;
     });
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['xlsx'],
-        withData: true,
-      );
-      if (result == null || result.files.single.bytes == null) {
+      final bytes = await pickExcelFileBytes();
+      if (bytes == null) {
         return;
       }
-      final parsed = _parseWorkbook(result.files.single.bytes!);
+      final parsed = _parseWorkbook(bytes);
       setState(() {
         _period = parsed.period;
         _rows = parsed.rows;
