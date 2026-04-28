@@ -23,7 +23,8 @@ class ConsumptionPaymentsPage extends StatefulWidget {
   final PaymentMethodFirestoreService? paymentMethodService;
 
   @override
-  State<ConsumptionPaymentsPage> createState() => _ConsumptionPaymentsPageState();
+  State<ConsumptionPaymentsPage> createState() =>
+      _ConsumptionPaymentsPageState();
 }
 
 class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
@@ -37,15 +38,23 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  String _query = '';
   List<BillingPeriod> _periods = const [];
   BillingPeriod? _selectedPeriod;
   List<Invoice> _invoices = const [];
   List<PaymentMethod> _paymentMethods = const [];
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -104,10 +113,8 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
     final result = await showDialog<_PaymentResult>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _PaymentDialog(
-        invoice: invoice,
-        paymentMethods: _paymentMethods,
-      ),
+      builder: (context) =>
+          _PaymentDialog(invoice: invoice, paymentMethods: _paymentMethods),
     );
     if (result == null) {
       return;
@@ -155,26 +162,32 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 760;
+    final filteredInvoices = _filteredInvoices();
     final invoicesList = _loading
         ? const Center(child: CircularProgressIndicator())
-        : _invoices.isEmpty
-            ? const Center(
-                child: Text(
-                  'No hay recibos facturados para este periodo.',
-                ),
-              )
-            : ListView.separated(
-                shrinkWrap: compact,
-                physics: compact
-                    ? const NeverScrollableScrollPhysics()
-                    : const AlwaysScrollableScrollPhysics(),
-                itemCount: _invoices.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) => _PaymentCard(
-                  invoice: _invoices[index],
-                  onUpdate: () => _openPaymentDialog(_invoices[index]),
-                ),
+        : filteredInvoices.isEmpty
+        ? Center(
+            child: Text(
+              _invoices.isEmpty
+                  ? 'No hay recibos facturados para este periodo.'
+                  : 'No hay recibos que coincidan con la busqueda.',
+            ),
+          )
+        : ListView.separated(
+            shrinkWrap: compact,
+            physics: compact
+                ? const NeverScrollableScrollPhysics()
+                : const AlwaysScrollableScrollPhysics(),
+            itemCount: filteredInvoices.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final invoice = filteredInvoices[index];
+              return _PaymentCard(
+                invoice: invoice,
+                onUpdate: () => _openPaymentDialog(invoice),
               );
+            },
+          );
 
     return Stack(
       children: [
@@ -189,13 +202,27 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       _Header(
                         periods: _periods,
                         selectedPeriod: _selectedPeriod,
-                        paidCount: _invoices.where((item) => item.pagado).length,
-                        pendingCount: _invoices.where((item) => !item.pagado).length,
+                        paidCount: _invoices
+                            .where((item) => item.pagado)
+                            .length,
+                        pendingCount: _invoices
+                            .where((item) => !item.pagado)
+                            .length,
                         onPeriodChanged: (period) {
                           if (period != null) {
                             _loadInvoices(period);
                           }
                         },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: (value) => setState(() => _query = value),
+                        decoration: const InputDecoration(
+                          labelText:
+                              'Buscar por nombre, codigo de contador o codigo de usuario',
+                          prefixIcon: Icon(Icons.search_rounded),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       if (_error != null)
@@ -217,12 +244,24 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       periods: _periods,
                       selectedPeriod: _selectedPeriod,
                       paidCount: _invoices.where((item) => item.pagado).length,
-                      pendingCount: _invoices.where((item) => !item.pagado).length,
+                      pendingCount: _invoices
+                          .where((item) => !item.pagado)
+                          .length,
                       onPeriodChanged: (period) {
                         if (period != null) {
                           _loadInvoices(period);
                         }
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      decoration: const InputDecoration(
+                        labelText:
+                            'Buscar por nombre, codigo de contador o codigo de usuario',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     if (_error != null)
@@ -246,6 +285,18 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
           ),
       ],
     );
+  }
+
+  List<Invoice> _filteredInvoices() {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return _invoices;
+    }
+    return _invoices.where((invoice) {
+      return invoice.nombreUsuario.toLowerCase().contains(query) ||
+          invoice.codigoUsuario.toLowerCase().contains(query) ||
+          invoice.codigoContador.toLowerCase().contains(query);
+    }).toList();
   }
 }
 
@@ -272,7 +323,10 @@ class _Header extends StatelessWidget {
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Registrar pagos', style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              'Registrar pagos',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 8),
             Text(
               'Selecciona un periodo y registra el valor pagado de cada recibo.',
@@ -336,24 +390,25 @@ class _Header extends StatelessWidget {
 }
 
 class _PaymentCard extends StatelessWidget {
-  const _PaymentCard({
-    required this.invoice,
-    required this.onUpdate,
-  });
+  const _PaymentCard({required this.invoice, required this.onUpdate});
 
   final Invoice invoice;
   final VoidCallback onUpdate;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = invoice.pagado ? Colors.green.shade800 : Colors.orange.shade800;
+    final statusColor = invoice.pagado
+        ? Colors.green.shade800
+        : Colors.orange.shade800;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: invoice.pagado ? Colors.green.shade200 : Colors.orange.shade200,
+          color: invoice.pagado
+              ? Colors.green.shade200
+              : Colors.orange.shade200,
         ),
       ),
       child: LayoutBuilder(
@@ -367,17 +422,21 @@ class _PaymentCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 6),
-              Text('Codigo usuario: ${invoice.codigoUsuario} · Contador: ${invoice.codigoContador}'),
+              Text(
+                'Codigo usuario: ${invoice.codigoUsuario} · Contador: ${invoice.codigoContador}',
+              ),
               const SizedBox(height: 6),
-              Text('Total recibo: ${_formatCurrency(invoice.total)} · Vence: ${_formatDate(invoice.fechaVencimiento)}'),
+              Text(
+                'Total recibo: ${_formatCurrency(invoice.total)} · Vence: ${_formatDate(invoice.fechaVencimiento)}',
+              ),
               const SizedBox(height: 6),
               Text(
                 invoice.pagado
                     ? 'Estado: pagado · Valor pagado: ${_formatCurrency(invoice.valorPagado ?? invoice.total)}'
                     : 'Estado: facturado pendiente de pago',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: statusColor,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: statusColor),
               ),
               if (!invoice.pagado) ...[
                 const SizedBox(height: 6),
@@ -395,7 +454,9 @@ class _PaymentCard extends StatelessWidget {
           final action = ElevatedButton.icon(
             onPressed: onUpdate,
             style: ElevatedButton.styleFrom(minimumSize: const Size(0, 44)),
-            icon: Icon(invoice.pagado ? Icons.undo_rounded : Icons.payments_rounded),
+            icon: Icon(
+              invoice.pagado ? Icons.undo_rounded : Icons.payments_rounded,
+            ),
             label: Text(invoice.pagado ? 'Cambiar estado' : 'Registrar pago'),
           );
 
@@ -419,10 +480,7 @@ class _PaymentCard extends StatelessWidget {
 }
 
 class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({
-    required this.invoice,
-    required this.paymentMethods,
-  });
+  const _PaymentDialog({required this.invoice, required this.paymentMethods});
 
   final Invoice invoice;
   final List<PaymentMethod> paymentMethods;
@@ -441,7 +499,8 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   @override
   void initState() {
     super.initState();
-    _valueController.text = '${widget.invoice.valorPagado ?? widget.invoice.total}';
+    _valueController.text =
+        '${widget.invoice.valorPagado ?? widget.invoice.total}';
     _observationsController.text = widget.invoice.observacionesPago ?? '';
     if ((widget.invoice.medioPagoId ?? '').isNotEmpty) {
       final matches = widget.paymentMethods.where(
@@ -473,7 +532,10 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Actualizar pago', style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'Actualizar pago',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   '${toDisplayUserName(widget.invoice.nombreUsuario)} · ${_formatCurrency(widget.invoice.total)}',
@@ -524,7 +586,8 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     decoration: const InputDecoration(
                       labelText: 'Valor pagado',
-                      helperText: 'Este valor queda guardado en la base de datos.',
+                      helperText:
+                          'Este valor queda guardado en la base de datos.',
                     ),
                     validator: (value) {
                       if (!_paid) {
@@ -555,7 +618,8 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                           ),
                         )
                         .toList(),
-                    onChanged: (value) => setState(() => _paymentMethod = value),
+                    onChanged: (value) =>
+                        setState(() => _paymentMethod = value),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -589,7 +653,9 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                                 ? int.tryParse(_valueController.text.trim())
                                 : null,
                             paymentMethod: _paid ? _paymentMethod : null,
-                            observations: _paid ? _observationsController.text.trim() : null,
+                            observations: _paid
+                                ? _observationsController.text.trim()
+                                : null,
                           ),
                         );
                       },

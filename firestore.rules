@@ -59,7 +59,16 @@ service cloud.firestore {
     function isPaymentStatusUpdate() {
       return isAdmin() &&
           request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['pagado', 'estado', 'reciboId']);
+              .hasOnly([
+                'pagado',
+                'estado',
+                'reciboId',
+                'valorPagado',
+                'fechaPago',
+                'medioPagoId',
+                'medioPagoDescripcion',
+                'observacionesPago'
+              ]);
     }
 
     match /usuarios/{userId} {
