@@ -10,6 +10,18 @@ Future<Uint8List?> pickExcelFileBytes() {
     ..accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ..multiple = false;
 
+  late final StreamSubscription<html.Event> focusSubscription;
+  void completeIfCanceled() {
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      if (!completer.isCompleted && (input.files?.isEmpty ?? true)) {
+        completer.complete(null);
+      }
+    });
+  }
+
+  focusSubscription = html.window.onFocus.listen((_) => completeIfCanceled());
+  completer.future.whenComplete(() => focusSubscription.cancel());
+
   input.onChange.first.then((_) {
     final file = input.files?.isEmpty ?? true ? null : input.files!.first;
     if (file == null) {
