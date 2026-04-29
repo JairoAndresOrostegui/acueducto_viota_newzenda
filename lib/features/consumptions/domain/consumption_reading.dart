@@ -53,6 +53,8 @@ class ConsumptionReading {
 
   bool get isSynced => estado == 'sincronizado';
   bool get isBlocked => estado == 'bloqueado';
+  bool get isPendingUpload =>
+      estado == 'pendiente_local' || estado == 'pendiente_revision';
   bool get isEditableByAdmin => !pagado;
   bool get hasIrregularity => irregularidad != null;
 

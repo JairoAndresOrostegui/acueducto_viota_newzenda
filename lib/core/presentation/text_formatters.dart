@@ -15,7 +15,17 @@ String toDisplayText(String value) {
     return lower.toUpperCase();
   }
 
-  return '${lower[0].toUpperCase()}${lower.substring(1)}';
+  const labels = {
+    'al_dia': 'Al día',
+    'en_mora': 'En mora',
+  };
+  final knownLabel = labels[lower];
+  if (knownLabel != null) {
+    return knownLabel;
+  }
+
+  final readable = lower.replaceAll('_', ' ');
+  return '${readable[0].toUpperCase()}${readable.substring(1)}';
 }
 
 String toDisplayUserName(String value) {

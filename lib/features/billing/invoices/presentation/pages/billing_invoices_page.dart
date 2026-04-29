@@ -341,6 +341,69 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     }
   }
 
+  Future<void> _regenerateInvoice(Invoice invoice) async {
+    final period = _selectedPeriod;
+    if (period == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Regenerar recibo'),
+        content: Text(
+          'Se regenerara el recibo de ${toDisplayUserName(invoice.nombreUsuario)} con los valores vigentes. Los recibos pagados no se pueden modificar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Regenerar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final values = await _valueService.fetchActiveItem();
+      if (values == null) {
+        throw StateError('No hay configuracion activa de valores.');
+      }
+      final paymentMethods = await _paymentMethodService.fetchItems();
+      await _invoiceService.regenerateInvoice(
+        period: period,
+        existing: invoice,
+        values: values,
+        paymentMethods: paymentMethods,
+        actor: widget.currentUser,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recibo regenerado.')),
+      );
+      await _loadPeriodData(period);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No fue posible regenerar el recibo: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   Future<void> _printInvoice(Invoice invoice) async {
     try {
       await _printingService.printInvoice(invoice);
@@ -671,6 +734,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                   return _InvoicePreviewCard(
                     invoice: invoice,
                     onPrint: () => _printInvoice(invoice),
+                    onRegenerate: invoice.estaPagado
+                        ? null
+                        : () => _regenerateInvoice(invoice),
                   );
                 },
               );
@@ -1051,10 +1117,12 @@ class _InvoicePreviewCard extends StatelessWidget {
   const _InvoicePreviewCard({
     required this.invoice,
     required this.onPrint,
+    required this.onRegenerate,
   });
 
   final Invoice invoice;
   final VoidCallback onPrint;
+  final VoidCallback? onRegenerate;
 
   @override
   Widget build(BuildContext context) {
@@ -1070,15 +1138,32 @@ class _InvoicePreviewCard extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: onPrint,
-              style: OutlinedButton.styleFrom(
-                fixedSize: const Size(120, 44),
-                minimumSize: const Size(120, 44),
-                maximumSize: const Size(120, 44),
-              ),
-              icon: const Icon(Icons.picture_as_pdf_rounded),
-              label: const Text('PDF'),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onRegenerate,
+                  style: OutlinedButton.styleFrom(
+                    fixedSize: const Size(150, 44),
+                    minimumSize: const Size(150, 44),
+                    maximumSize: const Size(150, 44),
+                  ),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Regenerar'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onPrint,
+                  style: OutlinedButton.styleFrom(
+                    fixedSize: const Size(120, 44),
+                    minimumSize: const Size(120, 44),
+                    maximumSize: const Size(120, 44),
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf_rounded),
+                  label: const Text('PDF'),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 14),

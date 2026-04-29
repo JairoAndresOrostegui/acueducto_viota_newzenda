@@ -353,6 +353,61 @@ class InvoiceFirestoreService {
     );
   }
 
+  Future<void> regenerateInvoice({
+    required BillingPeriod period,
+    required Invoice existing,
+    required BillingValueConfig values,
+    required List<PaymentMethod> paymentMethods,
+    required AppUser actor,
+  }) async {
+    _ensureAccountingPeriod(period.id);
+    if (existing.pagado || existing.estado.trim().toLowerCase() == 'pagado') {
+      throw StateError('No se puede regenerar un recibo pagado.');
+    }
+
+    final readingSnapshot =
+        await _periodConsumptions(period.id).doc(existing.codigoContador).get();
+    if (!readingSnapshot.exists || readingSnapshot.data() == null) {
+      throw StateError('No se encontro la lectura asociada al recibo.');
+    }
+
+    final reading = ConsumptionReading.fromFirestore(
+      readingSnapshot.id,
+      readingSnapshot.data()!,
+    );
+    final now = DateTime.now();
+    final dueDate = _resolveDueDate(now);
+    final paymentLines = paymentMethods
+        .map((item) => item.descripcion.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    final observations = await _observationService.fetchItems();
+    final usersByCode = await _fetchUsersByCode();
+    final previousInvoicesByMeter = await _fetchPreviousInvoicesByMeter(period);
+    final invoice = _buildInvoice(
+      period: period,
+      reading: reading,
+      values: values,
+      paymentText: paymentLines.join('\n'),
+      paymentLines: paymentLines,
+      generatedAt: now,
+      dueDate: dueDate,
+      previousInvoice: previousInvoicesByMeter[reading.codigoContador],
+      sector: usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
+      appliedObservations: _resolveAppliedObservations(
+        observations,
+        periodId: period.id,
+        reading: reading,
+      ),
+      actor: actor,
+      existingInvoice: existing,
+    );
+
+    await _periodInvoices(period.id)
+        .doc(invoice.id)
+        .set(invoice.toFirestore(), SetOptions(merge: true));
+  }
+
   Invoice _buildInvoice({
     required BillingPeriod period,
     required ConsumptionReading reading,

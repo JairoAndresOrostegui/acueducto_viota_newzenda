@@ -39,6 +39,7 @@ class _ConsumptionSuspensionsAdminPageState
   String? _error;
   String _query = '';
   String _searchField = 'nombre';
+  String _statusFilter = 'all';
   List<BillingPeriod> _periods = const [];
   BillingPeriod? _selectedPeriod;
   List<Invoice> _invoices = const [];
@@ -168,11 +169,14 @@ class _ConsumptionSuspensionsAdminPageState
   @override
   Widget build(BuildContext context) {
     final filteredInvoices = _filteredInvoices();
+    final currentCount = _invoices.length;
+    final upToDateCount =
+        _invoices.where((item) => _suspensionStatus(item) == 'al_dia').length;
     final moraCount = _invoices
-        .where((item) => item.estadoPeriodoAnterior == 'en_mora')
+        .where((item) => _suspensionStatus(item) == 'en_mora')
         .length;
     final suspendidasCount =
-        _invoices.where((item) => item.estaSuspendido).length;
+        _invoices.where((item) => _suspensionStatus(item) == 'suspendido').length;
 
     return Stack(
       children: [
@@ -184,12 +188,18 @@ class _ConsumptionSuspensionsAdminPageState
               _Header(
                 periods: _periods,
                 selectedPeriod: _selectedPeriod,
+                totalCount: currentCount,
+                upToDateCount: upToDateCount,
                 moraCount: moraCount,
                 suspendidasCount: suspendidasCount,
+                statusFilter: _statusFilter,
                 onPeriodChanged: (period) {
                   if (period != null) {
                     _loadInvoices(period);
                   }
+                },
+                onStatusFilterChanged: (value) {
+                  setState(() => _statusFilter = value);
                 },
               ),
               const SizedBox(height: 16),
@@ -259,6 +269,9 @@ class _ConsumptionSuspensionsAdminPageState
   List<Invoice> _filteredInvoices() {
     final query = _query.trim().toLowerCase();
     return _invoices.where((invoice) {
+      if (!_matchesStatusFilter(invoice)) {
+        return false;
+      }
       if (query.isEmpty) {
         return true;
       }
@@ -268,6 +281,26 @@ class _ConsumptionSuspensionsAdminPageState
         _ => invoice.nombreUsuario.toLowerCase().contains(query),
       };
     }).toList();
+  }
+
+  bool _matchesStatusFilter(Invoice invoice) {
+    return switch (_statusFilter) {
+      'al_dia' => _suspensionStatus(invoice) == 'al_dia',
+      'en_mora' => _suspensionStatus(invoice) == 'en_mora',
+      'suspendido' => _suspensionStatus(invoice) == 'suspendido',
+      _ => true,
+    };
+  }
+
+  String _suspensionStatus(Invoice invoice) {
+    if (invoice.estaSuspendido) {
+      return 'suspendido';
+    }
+    return switch ((invoice.estadoPeriodoAnterior ?? '').trim().toLowerCase()) {
+      'en_mora' => 'en_mora',
+      'suspendido' => 'suspendido',
+      _ => 'al_dia',
+    };
   }
 }
 
@@ -324,16 +357,24 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.periods,
     required this.selectedPeriod,
+    required this.totalCount,
+    required this.upToDateCount,
     required this.moraCount,
     required this.suspendidasCount,
+    required this.statusFilter,
     required this.onPeriodChanged,
+    required this.onStatusFilterChanged,
   });
 
   final List<BillingPeriod> periods;
   final BillingPeriod? selectedPeriod;
+  final int totalCount;
+  final int upToDateCount;
   final int moraCount;
   final int suspendidasCount;
+  final String statusFilter;
   final ValueChanged<BillingPeriod?> onPeriodChanged;
+  final ValueChanged<String> onStatusFilterChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -357,8 +398,26 @@ class _Header extends StatelessWidget {
               spacing: 10,
               runSpacing: 10,
               children: [
-                Chip(label: Text('En mora: $moraCount')),
-                Chip(label: Text('Suspendidas: $suspendidasCount')),
+                ChoiceChip(
+                  label: Text('Todos: $totalCount'),
+                  selected: statusFilter == 'all',
+                  onSelected: (_) => onStatusFilterChanged('all'),
+                ),
+                ChoiceChip(
+                  label: Text('Al día: $upToDateCount'),
+                  selected: statusFilter == 'al_dia',
+                  onSelected: (_) => onStatusFilterChanged('al_dia'),
+                ),
+                ChoiceChip(
+                  label: Text('En mora: $moraCount'),
+                  selected: statusFilter == 'en_mora',
+                  onSelected: (_) => onStatusFilterChanged('en_mora'),
+                ),
+                ChoiceChip(
+                  label: Text('Suspendidas: $suspendidasCount'),
+                  selected: statusFilter == 'suspendido',
+                  onSelected: (_) => onStatusFilterChanged('suspendido'),
+                ),
               ],
             ),
           ],
@@ -477,6 +536,9 @@ class _SuspensionCard extends StatelessWidget {
           );
           final action = OutlinedButton.icon(
             onPressed: onSuspend,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 44),
+            ),
             icon: const Icon(Icons.pause_circle_outline_rounded),
             label: const Text('Suspender'),
           );

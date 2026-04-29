@@ -43,6 +43,9 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     'editado_admin',
     'ajuste_pendiente',
     'irregularidad_reportada',
+    'facturado',
+    'pagado',
+    'suspendido',
   };
 
   late final UserFirestoreService _userService =
@@ -60,6 +63,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
 
   bool _isBusy = false;
   bool _showPendingReadings = false;
+  bool _showIrregularReadings = false;
   bool _hasLocalEditsThisSession = false;
   String _query = '';
   String _searchField = 'nombre';
@@ -83,19 +87,22 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   Widget build(BuildContext context) {
     final filteredCustomers = _filteredCustomers();
     final filteredPendingCustomers = _filteredPendingCustomers();
+    final filteredIrregularCustomers = _filteredIrregularCustomers();
     final periodReadings = _readings
         .where((item) => item.periodoActual == _workingPeriod)
         .toList();
     final compact = MediaQuery.sizeOf(context).width < 760;
-    final pendingCount = periodReadings
-        .where((item) => !item.isSynced && !item.isBlocked)
-        .length;
+    final pendingCount =
+        periodReadings.where((item) => item.isPendingUpload).length;
     final blockedCount = periodReadings.where((item) => item.isBlocked).length;
     final irregularCount = periodReadings.where((item) => item.hasIrregularity).length;
     final missingReadingsCount = _pendingCustomersWithoutReading().length;
-    final listIsEmpty = _showPendingReadings
-        ? filteredPendingCustomers.isEmpty
-        : filteredCustomers.isEmpty;
+    final visibleCustomers = _showPendingReadings
+        ? filteredPendingCustomers
+        : _showIrregularReadings
+            ? filteredIrregularCustomers
+            : filteredCustomers;
+    final listIsEmpty = visibleCustomers.isEmpty;
     final customerList = listIsEmpty
         ? const Center(
             child: Text(
@@ -107,13 +114,11 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
             physics: compact
                 ? const NeverScrollableScrollPhysics()
                 : const AlwaysScrollableScrollPhysics(),
-            itemCount: _showPendingReadings
-                ? filteredPendingCustomers.length
-                : filteredCustomers.length,
+            itemCount: visibleCustomers.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               if (_showPendingReadings) {
-                final customer = filteredPendingCustomers[index];
+                final customer = visibleCustomers[index];
                 return _PendingReadingRow(
                   customer: customer,
                   previousReading: _previousReadingFor(
@@ -122,7 +127,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                   ),
                 );
               }
-              final customer = filteredCustomers[index];
+              final customer = visibleCustomers[index];
               final reading = _readingFor(
                 customer.codigoContador,
                 _workingPeriod,
@@ -163,10 +168,12 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                         irregularCount: irregularCount,
                         missingReadingsCount: missingReadingsCount,
                         showPendingReadings: _showPendingReadings,
+                        showIrregularReadings: _showIrregularReadings,
                         onDownloadPeriod: _downloadWorkingPeriod,
                         onUploadReadings: _uploadPendingReadings,
                         onClearLocalReadings: _clearLocalReadings,
                         onTogglePendingReadings: _togglePendingReadings,
+                        onToggleIrregularReadings: _toggleIrregularReadings,
                       ),
                       const SizedBox(height: 20),
                       TextField(
@@ -198,10 +205,12 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                       irregularCount: irregularCount,
                       missingReadingsCount: missingReadingsCount,
                       showPendingReadings: _showPendingReadings,
+                      showIrregularReadings: _showIrregularReadings,
                       onDownloadPeriod: _downloadWorkingPeriod,
                       onUploadReadings: _uploadPendingReadings,
                       onClearLocalReadings: _clearLocalReadings,
                       onTogglePendingReadings: _togglePendingReadings,
+                      onToggleIrregularReadings: _toggleIrregularReadings,
                     ),
                     const SizedBox(height: 20),
                     TextField(
@@ -264,6 +273,25 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     return pending.where((item) => _matchesSearch(item, query)).toList();
   }
 
+  List<ConsumptionCustomer> _filteredIrregularCustomers() {
+    final period = _workingPeriod;
+    if (period == null) {
+      return const [];
+    }
+    final irregularMeters = _readings
+        .where((item) => item.periodoActual == period && item.hasIrregularity)
+        .map((item) => item.codigoContador)
+        .toSet();
+    final items = _customers
+        .where((customer) => irregularMeters.contains(customer.codigoContador))
+        .toList();
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return items;
+    }
+    return items.where((item) => _matchesSearch(item, query)).toList();
+  }
+
   bool _matchesSearch(ConsumptionCustomer item, String query) {
     return switch (_searchField) {
       'codigoUsuario' => item.codigoUsuario.toLowerCase().contains(query),
@@ -290,7 +318,28 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       );
       return;
     }
-    setState(() => _showPendingReadings = !_showPendingReadings);
+    setState(() {
+      _showPendingReadings = !_showPendingReadings;
+      if (_showPendingReadings) {
+        _showIrregularReadings = false;
+      }
+    });
+  }
+
+  void _toggleIrregularReadings() {
+    if (_workingPeriod == null) {
+      _showInfoDialog(
+        title: 'Sin periodo de trabajo',
+        message: 'Descarga primero el periodo vigente para revisar irregularidades.',
+      );
+      return;
+    }
+    setState(() {
+      _showIrregularReadings = !_showIrregularReadings;
+      if (_showIrregularReadings) {
+        _showPendingReadings = false;
+      }
+    });
   }
 
   ConsumptionReading? _readingFor(String meterCode, String? period) {
@@ -333,7 +382,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
           setState(() {
             _readings = [
               for (final item in _readings)
-                if (item.isSynced || item.isBlocked) item,
+                if (!item.isPendingUpload) item,
             ];
           });
         } else {
@@ -378,6 +427,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         _customers = customerCache;
         _readings = mergedReadings;
         _showPendingReadings = false;
+        _showIrregularReadings = false;
         _hasLocalEditsThisSession = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -409,7 +459,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       final pendingIndexes = <int>[];
       for (var index = 0; index < readings.length; index++) {
         final item = readings[index];
-        if (!item.isSynced && !item.isBlocked) {
+        if (item.isPendingUpload) {
           pendingIndexes.add(index);
         }
       }
@@ -617,9 +667,10 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       setState(() {
         _readings = [
           for (final item in _readings)
-            if (item.isSynced || item.isBlocked) item,
+            if (!item.isPendingUpload) item,
         ];
         _showPendingReadings = false;
+        _showIrregularReadings = false;
         _hasLocalEditsThisSession = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -666,7 +717,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     }
     for (final item in remote) {
       final localItem = merged[item.id];
-      if (localItem != null && !localItem.isSynced && !localItem.isBlocked) {
+      if (localItem != null && localItem.isPendingUpload) {
         continue;
       }
       merged[item.id] = item;
@@ -680,7 +731,7 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     final workingPeriod = _workingPeriod;
     return _readings
         .where((item) => workingPeriod == null || item.periodoActual == workingPeriod)
-        .where((item) => !item.isSynced && !item.isBlocked)
+        .where((item) => item.isPendingUpload)
         .toList();
   }
 
@@ -764,10 +815,12 @@ class _Header extends StatelessWidget {
     required this.irregularCount,
     required this.missingReadingsCount,
     required this.showPendingReadings,
+    required this.showIrregularReadings,
     required this.onDownloadPeriod,
     required this.onUploadReadings,
     required this.onClearLocalReadings,
     required this.onTogglePendingReadings,
+    required this.onToggleIrregularReadings,
   });
 
   final String? workingPeriod;
@@ -777,10 +830,12 @@ class _Header extends StatelessWidget {
   final int irregularCount;
   final int missingReadingsCount;
   final bool showPendingReadings;
+  final bool showIrregularReadings;
   final VoidCallback onDownloadPeriod;
   final VoidCallback onUploadReadings;
   final VoidCallback onClearLocalReadings;
   final VoidCallback onTogglePendingReadings;
+  final VoidCallback onToggleIrregularReadings;
 
   @override
   Widget build(BuildContext context) {
@@ -840,6 +895,20 @@ class _Header extends StatelessWidget {
                 showPendingReadings
                     ? 'Ver todos'
                     : 'Lecturas pendientes ($missingReadingsCount)',
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: onToggleIrregularReadings,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+              icon: Icon(
+                showIrregularReadings
+                    ? Icons.list_alt_rounded
+                    : Icons.warning_amber_rounded,
+              ),
+              label: Text(
+                showIrregularReadings
+                    ? 'Ver todos'
+                    : 'Irregularidades ($irregularCount)',
               ),
             ),
           ],
