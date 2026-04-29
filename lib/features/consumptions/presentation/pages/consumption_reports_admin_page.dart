@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:excel/excel.dart' as xls;
 
 import '../../../../core/presentation/text_formatters.dart';
 import '../../../../theme/app_colors.dart';
@@ -8,7 +11,8 @@ import '../../../billing/invoices/data/invoice_firestore_service.dart';
 import '../../../billing/invoices/domain/invoice.dart';
 import '../../data/consumption_firestore_service.dart';
 import '../../domain/consumption_reading.dart';
-import 'csv_download_stub.dart' if (dart.library.html) 'csv_download_web.dart';
+import 'consumption_reports_file_exporter_stub.dart'
+    if (dart.library.html) 'consumption_reports_file_exporter_web.dart';
 
 class ConsumptionReportsAdminPage extends StatefulWidget {
   const ConsumptionReportsAdminPage({
@@ -409,49 +413,55 @@ class _ConsumptionReportsAdminPageState
     }
   }
 
-  void _export() {
-    final rows = <List<String>>[
-      [
-        'periodo',
-        'codigo_usuario',
-        'nombre_usuario',
-        'codigo_contador',
-        'lectura_anterior',
-        'lectura_actual',
-        'consumo_calculado',
-        'saldo_anterior',
-        'valor_total_a_pagar',
-        'valor_pagado',
-        'estado',
-        'facturado',
-        'pagado',
-        'irregularidad',
-        'observaciones_operario',
-        'observaciones_admin',
-      ],
-      for (final item in _items) _exportRowForReading(item),
-    ];
-    final csv = rows.map(_encodeCsvRow).join('\n');
-    final filename = 'consumos_${_normalize(_periodController.text) ?? 'todos'}.csv';
-    final downloaded = downloadCsvFile(filename, csv);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          downloaded
-              ? 'Reporte descargado.'
-              : 'Descarga automatica no disponible en esta plataforma.',
-        ),
-      ),
+  Future<void> _export() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final excel = xls.Excel.createExcel();
+    final sheet = excel['reporte'];
+    sheet.appendRow([
+      xls.TextCellValue('periodo'),
+      xls.TextCellValue('codigo_usuario'),
+      xls.TextCellValue('nombre_usuario'),
+      xls.TextCellValue('codigo_contador'),
+      xls.TextCellValue('lectura_anterior'),
+      xls.TextCellValue('lectura_actual'),
+      xls.TextCellValue('consumo_calculado'),
+      xls.TextCellValue('saldo_anterior'),
+      xls.TextCellValue('valor_total_a_pagar'),
+      xls.TextCellValue('valor_pagado'),
+      xls.TextCellValue('estado'),
+      xls.TextCellValue('facturado'),
+      xls.TextCellValue('pagado'),
+      xls.TextCellValue('irregularidad'),
+      xls.TextCellValue('observaciones_operario'),
+      xls.TextCellValue('observaciones_admin'),
+    ]);
+    for (final item in _items) {
+      final row = _exportRowForReading(item);
+      sheet.appendRow(
+        row.map((value) => xls.TextCellValue(value)).toList(),
+      );
+    }
+    excel.setDefaultSheet('reporte');
+    final bytes = excel.encode();
+    if (bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No fue posible generar el Excel.')),
+      );
+      return;
+    }
+    final filename = 'consumos_${_normalize(_periodController.text) ?? 'todos'}.xlsx';
+    await saveConsumptionReportFile(
+      bytes: Uint8List.fromList(bytes),
+      fileName: filename,
+    );
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Reporte Excel descargado.')),
     );
   }
 
   String? _normalize(String value) {
     final text = value.trim();
     return text.isEmpty ? null : text;
-  }
-
-  String _encodeCsvRow(List<String> row) {
-    return row.map((item) => '"${item.replaceAll('"', '""')}"').join(',');
   }
 
   List<String> _exportRowForReading(ConsumptionReading item) {

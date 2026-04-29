@@ -55,6 +55,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
 
   String _search = '';
   String _draftSearch = '';
+  String _searchField = 'nombre';
   bool _isSaving = false;
   bool _isLoadingUsers = true;
   bool _isSearching = false;
@@ -150,8 +151,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                   onChanged: (value) => _draftSearch = value.trim(),
                   onSubmitted: (_) => _applySearch(),
                   decoration: InputDecoration(
-                    labelText:
-                        'Buscar por nombre, correo, rol, tipo cliente, documento o estado',
+                    labelText: 'Buscar usuarios',
                     prefixIcon: const Icon(Icons.search_rounded),
                     suffixIcon: _search.isEmpty
                         ? null
@@ -161,6 +161,16 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                             icon: const Icon(Icons.close_rounded),
                           ),
                   ),
+                ),
+                const SizedBox(height: 8),
+                _UserSearchFieldSelector(
+                  selected: _searchField,
+                  onChanged: (value) {
+                    setState(() => _searchField = value);
+                    if (_search.isNotEmpty) {
+                      _loadUsers(pageIndex: 0);
+                    }
+                  },
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -407,16 +417,19 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
     if (q.isEmpty) {
       return true;
     }
-    return user.nombre.toLowerCase().contains(q) ||
-        user.correo.toLowerCase().contains(q) ||
-        user.rol.toLowerCase().contains(q) ||
-        user.tipoCliente.toLowerCase().contains(q) ||
-        user.estado.toLowerCase().contains(q) ||
+    return switch (_searchField) {
+      'correo' => user.correo.toLowerCase().contains(q),
+      'rol' => user.rol.toLowerCase().contains(q),
+      'tipoCliente' => user.tipoCliente.toLowerCase().contains(q),
+      'documento' =>
         user.numeroDocumento.toLowerCase().contains(q) ||
-        user.tipoDocumento.toLowerCase().contains(q) ||
-        user.codigoUsuario.toLowerCase().contains(q) ||
-        user.numeroContador.join(' ').toLowerCase().contains(q) ||
-        user.sector.toLowerCase().contains(q);
+            user.tipoDocumento.toLowerCase().contains(q),
+      'estado' => user.estado.toLowerCase().contains(q),
+      'codigoUsuario' => user.codigoUsuario.toLowerCase().contains(q),
+      'contador' => user.numeroContador.join(' ').toLowerCase().contains(q),
+      'sector' => user.sector.toLowerCase().contains(q),
+      _ => user.nombre.toLowerCase().contains(q),
+    };
   }
 
   bool _hasIncompleteProfile(AppUser user) {
@@ -1352,6 +1365,64 @@ class _PaginationBar extends StatelessWidget {
   }
 }
 
+class _UserSearchFieldSelector extends StatelessWidget {
+  const _UserSearchFieldSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  static const _options = [
+    ('nombre', 'Nombre'),
+    ('correo', 'Correo'),
+    ('rol', 'Rol'),
+    ('tipoCliente', 'Tipo cliente'),
+    ('documento', 'Documento'),
+    ('estado', 'Estado'),
+    ('codigoUsuario', 'Codigo usuario'),
+    ('contador', 'Contador'),
+    ('sector', 'Sector'),
+  ];
+
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioGroup<String>(
+      groupValue: selected,
+      onChanged: (value) {
+        if (value != null) {
+          onChanged(value);
+        }
+      },
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final option in _options)
+            InkWell(
+              onTap: () => onChanged(option.$1),
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Radio<String>(
+                      value: option.$1,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Text(option.$2),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MetricCard extends StatelessWidget {
   const _MetricCard({
     required this.label,
@@ -1377,19 +1448,25 @@ class _MetricCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           width: 220,
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: isSelected
                 ? Border.all(color: AppColors.brandBlue, width: 2)
                 : null,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(label, style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 8),
-              Text(value, style: Theme.of(context).textTheme.headlineMedium),
+              Expanded(
+                child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
             ],
           ),
         ),

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../../../../theme/app_colors.dart';
 import '../../../../users/domain/app_user.dart';
+import '../../../periods/data/billing_period_firestore_service.dart';
+import '../../../periods/domain/billing_period.dart';
 import '../../data/billing_value_config_firestore_service.dart';
 import '../../domain/billing_value_config.dart';
 
@@ -143,18 +145,14 @@ class _Header extends StatelessWidget {
               ? 'Configuración vigente: ${versionLabel ?? 'Activa'}'
               : 'Sin configuración vigente.',
         ),
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ElevatedButton.icon(
+        if (!hasActiveConfig) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
             onPressed: onCreate,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(0, 48),
-            ),
-            icon: Icon(hasActiveConfig ? Icons.edit_rounded : Icons.add_rounded),
-            label: Text(hasActiveConfig ? 'Actualizar valores' : 'Crear valores'),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Crear valores'),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -175,15 +173,18 @@ class _BillingValueDialog extends StatefulWidget {
 
 class _BillingValueDialogState extends State<_BillingValueDialog> {
   final _formKey = GlobalKey<FormState>();
+  late final Future<List<BillingPeriod>> _periodsFuture;
   late final TextEditingController _cargoFijoController;
   late final TextEditingController _reconexionController;
   late final List<_RangeFormRow> _rangeRows;
+  late final List<_AdditionalValueFormRow> _additionalRows;
 
   bool get _isEditing => widget.item != null;
 
   @override
   void initState() {
     super.initState();
+    _periodsFuture = BillingPeriodFirestoreService().fetchPeriods();
     _cargoFijoController = TextEditingController(
       text: widget.item?.cargoFijo.toString() ?? '',
     );
@@ -196,6 +197,9 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
     if (_rangeRows.isEmpty) {
       _rangeRows.add(_RangeFormRow());
     }
+    _additionalRows = (widget.item?.valoresAdicionales ?? const [])
+        .map(_AdditionalValueFormRow.fromValue)
+        .toList();
   }
 
   @override
@@ -203,6 +207,9 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
     _cargoFijoController.dispose();
     _reconexionController.dispose();
     for (final row in _rangeRows) {
+      row.dispose();
+    }
+    for (final row in _additionalRows) {
       row.dispose();
     }
     super.dispose();
@@ -274,6 +281,32 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                   ),
                   const SizedBox(height: 12),
                   ..._buildRangeRows(),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Valores adicionales',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _addAdditionalValue,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                        ),
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Agregar valor'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Primero selecciona el periodo. Si el valor es masivo aplica a todos; si es individual se pide el código de usuario.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAdditionalRows(),
                   const SizedBox(height: 24),
                   Wrap(
                     alignment: WrapAlignment.end,
@@ -368,6 +401,226 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
     });
   }
 
+  Widget _buildAdditionalRows() {
+    if (_additionalRows.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(
+          'No hay valores adicionales configurados.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+    }
+
+    return FutureBuilder<List<BillingPeriod>>(
+      future: _periodsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(),
+          );
+        }
+        if (snapshot.hasError) {
+          return Text(
+            'No fue posible cargar los periodos para los valores adicionales.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.error,
+                ),
+          );
+        }
+        final periods = snapshot.data ?? const <BillingPeriod>[];
+        if (periods.isEmpty) {
+          return Text(
+            'Primero debes crear al menos un periodo para asignar valores adicionales.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.error,
+                ),
+          );
+        }
+
+        return Column(
+          children: List<Widget>.generate(_additionalRows.length, (index) {
+            final row = _additionalRows[index];
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index == _additionalRows.length - 1 ? 0 : 12,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Valor adicional ${index + 1}',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => _removeAdditionalValue(index),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          tooltip: 'Eliminar valor adicional',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 260,
+                          child: DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue: periods.any(
+                              (period) => period.id == row.periodoId,
+                            )
+                                ? row.periodoId
+                                : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Periodo',
+                            ),
+                            items: periods
+                                .map(
+                                  (period) => DropdownMenuItem<String>(
+                                    value: period.id,
+                                    child: Text(
+                                      _displayPeriod(period),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            selectedItemBuilder: (context) => periods
+                                .map(
+                                  (period) => Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      period.id,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              final period = periods.firstWhere(
+                                (item) => item.id == value,
+                              );
+                              setState(() {
+                                row.periodoId = period.id;
+                                row.periodoNombre = period.nombre;
+                              });
+                            },
+                            validator: (value) =>
+                                _validateAdditionalPeriod(row, value),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 160,
+                          child: DropdownButtonFormField<bool>(
+                            isExpanded: true,
+                            initialValue: row.isIndividual,
+                            decoration: const InputDecoration(
+                              labelText: 'Aplicación',
+                            ),
+                            items: const [
+                              DropdownMenuItem<bool>(
+                                value: false,
+                                child: Text(
+                                  'Masivo',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem<bool>(
+                                value: true,
+                                child: Text(
+                                  'Individual',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                row.isIndividual = value ?? false;
+                                if (!row.isIndividual) {
+                                  row.codigoUsuarioController.clear();
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 280,
+                          child: TextFormField(
+                            controller: row.conceptoController,
+                            decoration:
+                                const InputDecoration(labelText: 'Concepto'),
+                            validator: (value) =>
+                                _validateAdditionalConcept(row, value),
+                          ),
+                        ),
+                        if (row.isIndividual)
+                          SizedBox(
+                            width: 180,
+                            child: TextFormField(
+                              controller: row.codigoUsuarioController,
+                              decoration: const InputDecoration(
+                                labelText: 'Código usuario',
+                              ),
+                              validator: (value) =>
+                                  _validateAdditionalUserCode(row, value),
+                            ),
+                          ),
+                        SizedBox(
+                          width: 180,
+                          child: TextFormField(
+                            controller: row.valorController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration:
+                                const InputDecoration(labelText: 'Valor'),
+                            validator: (value) =>
+                                _validateAdditionalAmount(row, value),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+
+  String _displayPeriod(BillingPeriod period) {
+    final name = period.nombre.trim();
+    if (name.isEmpty) {
+      return period.id;
+    }
+    return '$name (${period.id})';
+  }
+
   Widget _moneyField({
     required TextEditingController controller,
     required String label,
@@ -416,6 +669,83 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
     setState(() {});
   }
 
+  void _addAdditionalValue() {
+    setState(() => _additionalRows.add(_AdditionalValueFormRow()));
+  }
+
+  void _removeAdditionalValue(int index) {
+    final row = _additionalRows.removeAt(index);
+    row.dispose();
+    setState(() {});
+  }
+
+  bool _additionalRowHasData(_AdditionalValueFormRow row) {
+    return row.periodoId != null ||
+        row.conceptoController.text.trim().isNotEmpty ||
+        row.codigoUsuarioController.text.trim().isNotEmpty ||
+        row.valorController.text.trim().isNotEmpty;
+  }
+
+  String? _validateAdditionalPeriod(
+    _AdditionalValueFormRow row,
+    String? value,
+  ) {
+    if (!_additionalRowHasData(row)) {
+      return null;
+    }
+    if ((value ?? '').trim().isEmpty) {
+      return 'Selecciona un periodo.';
+    }
+    return null;
+  }
+
+  String? _validateAdditionalConcept(
+    _AdditionalValueFormRow row,
+    String? value,
+  ) {
+    if (!_additionalRowHasData(row)) {
+      return null;
+    }
+    if ((value ?? '').trim().isEmpty) {
+      return 'Campo obligatorio.';
+    }
+    return null;
+  }
+
+  String? _validateAdditionalUserCode(
+    _AdditionalValueFormRow row,
+    String? value,
+  ) {
+    if (!_additionalRowHasData(row) || !row.isIndividual) {
+      return null;
+    }
+    if ((value ?? '').trim().isEmpty) {
+      return 'Campo obligatorio.';
+    }
+    return null;
+  }
+
+  String? _validateAdditionalAmount(
+    _AdditionalValueFormRow row,
+    String? value,
+  ) {
+    if (!_additionalRowHasData(row)) {
+      return null;
+    }
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Campo obligatorio.';
+    }
+    final amount = int.tryParse(text);
+    if (amount == null) {
+      return 'Solo se permiten números.';
+    }
+    if (amount <= 0) {
+      return 'Debe ser mayor a 0.';
+    }
+    return null;
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -455,6 +785,22 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
       return;
     }
 
+    final additionalValues = _additionalRows
+        .where(_additionalRowHasData)
+        .map(
+          (row) => AdditionalBillingValue(
+            periodoId: row.periodoId!,
+            periodoNombre: row.periodoNombre ?? row.periodoId!,
+            concepto: row.conceptoController.text.trim(),
+            valor: int.parse(row.valorController.text.trim()),
+            codigoUsuario: !row.isIndividual ||
+                    row.codigoUsuarioController.text.trim().isEmpty
+                ? null
+                : row.codigoUsuarioController.text.trim(),
+          ),
+        )
+        .toList();
+
     final now = DateTime.now();
     final item = BillingValueConfig(
       id: _buildId(now),
@@ -463,6 +809,7 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
       cargoFijo: int.parse(_cargoFijoController.text.trim()),
       reconexion: int.parse(_reconexionController.text.trim()),
       rangos: ranges,
+      valoresAdicionales: additionalValues,
       actorUid: widget.currentUser.uid,
       actorNombre: widget.currentUser.nombre,
       fechaCreacion: now,
@@ -572,6 +919,26 @@ class _BillingValueCard extends StatelessWidget {
                     )
                     .toList(),
               ),
+              if (item.valoresAdicionales.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'Valores adicionales',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: item.valoresAdicionales
+                      .map(
+                        (value) => _RangeChip(
+                          label:
+                              '${value.periodoNombre.isEmpty ? value.periodoId : value.periodoNombre} - ${value.concepto} - ${value.isMassive ? 'Masivo' : value.codigoUsuario} - ${_formatCurrency(value.valor)}',
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
             ],
           );
           final actions = Wrap(
@@ -657,6 +1024,43 @@ class _RangeFormRow {
     desdeController.dispose();
     hastaController.dispose();
     valorUnitarioController.dispose();
+  }
+}
+
+class _AdditionalValueFormRow {
+  _AdditionalValueFormRow({
+    this.periodoId,
+    this.periodoNombre,
+    this.isIndividual = false,
+    String concepto = '',
+    String codigoUsuario = '',
+    String valor = '',
+  })  : conceptoController = TextEditingController(text: concepto),
+        codigoUsuarioController = TextEditingController(text: codigoUsuario),
+        valorController = TextEditingController(text: valor);
+
+  factory _AdditionalValueFormRow.fromValue(AdditionalBillingValue value) {
+    return _AdditionalValueFormRow(
+      periodoId: value.periodoId.isEmpty ? null : value.periodoId,
+      periodoNombre: value.periodoNombre.isEmpty ? null : value.periodoNombre,
+      isIndividual: !value.isMassive,
+      concepto: value.concepto,
+      codigoUsuario: value.codigoUsuario ?? '',
+      valor: value.valor.toString(),
+    );
+  }
+
+  String? periodoId;
+  String? periodoNombre;
+  bool isIndividual;
+  final TextEditingController conceptoController;
+  final TextEditingController codigoUsuarioController;
+  final TextEditingController valorController;
+
+  void dispose() {
+    conceptoController.dispose();
+    codigoUsuarioController.dispose();
+    valorController.dispose();
   }
 }
 

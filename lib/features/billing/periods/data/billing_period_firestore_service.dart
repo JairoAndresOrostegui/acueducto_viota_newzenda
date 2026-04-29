@@ -6,6 +6,9 @@ class BillingPeriodFirestoreService {
   BillingPeriodFirestoreService({FirebaseFirestore? firestore})
       : _firestore = firestore;
 
+  static const int firstAllowedYear = 2025;
+  static const int firstAllowedMonth = 12;
+
   final FirebaseFirestore? _firestore;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
@@ -42,6 +45,7 @@ class BillingPeriodFirestoreService {
     required int ano,
     required int mes,
   }) async {
+    _validateAllowedPeriod(ano, mes);
     final docId = _docId(ano, mes);
     final docRef = _collection.doc(docId);
     await _db.runTransaction((transaction) async {
@@ -68,7 +72,11 @@ class BillingPeriodFirestoreService {
     required int ano,
     required List<int> meses,
   }) async {
-    final missingMonths = meses.toSet().toList()..sort();
+    final missingMonths = meses
+        .where((mes) => isAllowedPeriod(ano, mes))
+        .toSet()
+        .toList()
+      ..sort();
     if (missingMonths.isEmpty) {
       return;
     }
@@ -123,6 +131,22 @@ class BillingPeriodFirestoreService {
   static String docId(int ano, int mes) => _docId(ano, mes);
 
   static String periodName(int ano, int mes) => _periodName(ano, mes);
+
+  static bool isAllowedPeriod(int ano, int mes) {
+    if (ano < firstAllowedYear) {
+      return false;
+    }
+    if (ano == firstAllowedYear && mes < firstAllowedMonth) {
+      return false;
+    }
+    return mes >= 1 && mes <= 12;
+  }
+
+  static void _validateAllowedPeriod(int ano, int mes) {
+    if (!isAllowedPeriod(ano, mes)) {
+      throw StateError('El historial de facturacion inicia en diciembre 2025.');
+    }
+  }
 
   static String _docId(int ano, int mes) => '$ano-${mes.toString().padLeft(2, '0')}';
 

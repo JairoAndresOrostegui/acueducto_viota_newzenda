@@ -329,6 +329,11 @@ class InvoiceFirestoreService {
         valorTotal: values.cargoFijo,
       ),
       ..._buildConsumptionLines(consumption, values.rangos),
+      ..._buildAdditionalValueLines(
+        period.id,
+        reading.codigoUsuario,
+        values.valoresAdicionales,
+      ),
     ];
     final subtotal = lineItems.fold<int>(
       0,
@@ -558,5 +563,31 @@ class InvoiceFirestoreService {
       );
     }
     return items;
+  }
+
+  List<InvoiceLineItem> _buildAdditionalValueLines(
+    String periodId,
+    String codigoUsuario,
+    List<AdditionalBillingValue> values,
+  ) {
+    return values
+        .where(
+          (item) =>
+              item.concepto.trim().isNotEmpty &&
+              item.valor > 0 &&
+              item.appliesTo(
+                periodId: periodId,
+                userCode: codigoUsuario,
+              ),
+        )
+        .map(
+          (item) => InvoiceLineItem(
+            descripcion: 'Valor adicional - ${item.concepto.trim()}',
+            valorUnitario: item.valor,
+            cantidad: 1,
+            valorTotal: item.valor,
+          ),
+        )
+        .toList();
   }
 }

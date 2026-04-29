@@ -39,6 +39,8 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
   bool _saving = false;
   String? _error;
   String _query = '';
+  String _searchField = 'nombre';
+  String _paymentStatusFilter = 'all';
   List<BillingPeriod> _periods = const [];
   BillingPeriod? _selectedPeriod;
   List<Invoice> _invoices = const [];
@@ -68,6 +70,7 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
         _paymentMethodService.fetchItems(),
       ]);
       final periods = results[0] as List<BillingPeriod>;
+      final paymentMethods = results[1] as List<PaymentMethod>;
       final selected = periods.isEmpty
           ? null
           : periods.firstWhere(
@@ -76,7 +79,7 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
             );
       setState(() {
         _periods = periods;
-        _paymentMethods = results[1] as List<PaymentMethod>;
+        _paymentMethods = _withBuiltInPaymentMethods(paymentMethods);
         _selectedPeriod = selected;
       });
       if (selected != null) {
@@ -107,6 +110,16 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  List<PaymentMethod> _withBuiltInPaymentMethods(List<PaymentMethod> items) {
+    final map = <String, PaymentMethod>{
+      for (final item in items) item.id.trim().toLowerCase(): item,
+      PaymentMethod.cash.id: PaymentMethod.cash,
+    };
+    final merged = map.values.toList()
+      ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
+    return merged;
   }
 
   Future<void> _openPaymentDialog(Invoice invoice) async {
@@ -163,6 +176,9 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 760;
     final filteredInvoices = _filteredInvoices();
+    final paidCount = _invoices.where((item) => item.pagado).length;
+    final pendingCount = _invoices.where((item) => !item.pagado).length;
+    final totalCount = paidCount + pendingCount;
     final invoicesList = _loading
         ? const Center(child: CircularProgressIndicator())
         : filteredInvoices.isEmpty
@@ -202,27 +218,32 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       _Header(
                         periods: _periods,
                         selectedPeriod: _selectedPeriod,
-                        paidCount: _invoices
-                            .where((item) => item.pagado)
-                            .length,
-                        pendingCount: _invoices
-                            .where((item) => !item.pagado)
-                            .length,
+                        paidCount: paidCount,
+                        pendingCount: pendingCount,
+                        totalCount: totalCount,
+                        paymentStatusFilter: _paymentStatusFilter,
                         onPeriodChanged: (period) {
                           if (period != null) {
                             _loadInvoices(period);
                           }
+                        },
+                        onPaymentStatusChanged: (value) {
+                          setState(() => _paymentStatusFilter = value);
                         },
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _searchController,
                         onChanged: (value) => setState(() => _query = value),
-                        decoration: const InputDecoration(
-                          labelText:
-                              'Buscar por nombre, codigo de contador o codigo de usuario',
+                    decoration: const InputDecoration(
+                          labelText: 'Buscar en pagos',
                           prefixIcon: Icon(Icons.search_rounded),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      _PaymentSearchFieldSelector(
+                        selected: _searchField,
+                        onChanged: (value) => setState(() => _searchField = value),
                       ),
                       const SizedBox(height: 16),
                       if (_error != null)
@@ -243,25 +264,32 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                     _Header(
                       periods: _periods,
                       selectedPeriod: _selectedPeriod,
-                      paidCount: _invoices.where((item) => item.pagado).length,
-                      pendingCount: _invoices
-                          .where((item) => !item.pagado)
-                          .length,
+                      paidCount: paidCount,
+                      pendingCount: pendingCount,
+                      totalCount: totalCount,
+                      paymentStatusFilter: _paymentStatusFilter,
                       onPeriodChanged: (period) {
                         if (period != null) {
                           _loadInvoices(period);
                         }
+                      },
+                      onPaymentStatusChanged: (value) {
+                        setState(() => _paymentStatusFilter = value);
                       },
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
-                      decoration: const InputDecoration(
-                        labelText:
-                            'Buscar por nombre, codigo de contador o codigo de usuario',
-                        prefixIcon: Icon(Icons.search_rounded),
+                    decoration: const InputDecoration(
+                          labelText: 'Buscar en pagos',
+                          prefixIcon: Icon(Icons.search_rounded),
+                        ),
                       ),
+                    const SizedBox(height: 8),
+                    _PaymentSearchFieldSelector(
+                      selected: _searchField,
+                      onChanged: (value) => setState(() => _searchField = value),
                     ),
                     const SizedBox(height: 16),
                     if (_error != null)
@@ -289,14 +317,80 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
 
   List<Invoice> _filteredInvoices() {
     final query = _query.trim().toLowerCase();
-    if (query.isEmpty) {
-      return _invoices;
-    }
     return _invoices.where((invoice) {
-      return invoice.nombreUsuario.toLowerCase().contains(query) ||
-          invoice.codigoUsuario.toLowerCase().contains(query) ||
-          invoice.codigoContador.toLowerCase().contains(query);
+      if (!_matchesStatusFilter(invoice)) {
+        return false;
+      }
+      if (query.isEmpty) {
+        return true;
+      }
+      return _matchesSearch(invoice, query);
     }).toList();
+  }
+
+  bool _matchesSearch(Invoice invoice, String query) {
+    return switch (_searchField) {
+      'codigoUsuario' => invoice.codigoUsuario.toLowerCase().contains(query),
+      'contador' => invoice.codigoContador.toLowerCase().contains(query),
+      _ => invoice.nombreUsuario.toLowerCase().contains(query),
+    };
+  }
+
+  bool _matchesStatusFilter(Invoice invoice) {
+    return switch (_paymentStatusFilter) {
+      'paid' => invoice.pagado,
+      'pending' => !invoice.pagado,
+      _ => true,
+    };
+  }
+}
+
+class _PaymentSearchFieldSelector extends StatelessWidget {
+  const _PaymentSearchFieldSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  static const _options = [
+    ('nombre', 'Nombre'),
+    ('codigoUsuario', 'Codigo usuario'),
+    ('contador', 'Codigo contador'),
+  ];
+
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioGroup<String>(
+      groupValue: selected,
+      onChanged: (value) {
+        if (value != null) {
+          onChanged(value);
+        }
+      },
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final option in _options)
+            InkWell(
+              onTap: () => onChanged(option.$1),
+              borderRadius: BorderRadius.circular(20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Radio<String>(
+                    value: option.$1,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  Text(option.$2),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -306,14 +400,20 @@ class _Header extends StatelessWidget {
     required this.selectedPeriod,
     required this.paidCount,
     required this.pendingCount,
+    required this.totalCount,
+    required this.paymentStatusFilter,
     required this.onPeriodChanged,
+    required this.onPaymentStatusChanged,
   });
 
   final List<BillingPeriod> periods;
   final BillingPeriod? selectedPeriod;
   final int paidCount;
   final int pendingCount;
+  final int totalCount;
   final ValueChanged<BillingPeriod?> onPeriodChanged;
+  final String paymentStatusFilter;
+  final ValueChanged<String> onPaymentStatusChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -337,8 +437,21 @@ class _Header extends StatelessWidget {
               spacing: 10,
               runSpacing: 10,
               children: [
-                Chip(label: Text('Pagados: $paidCount')),
-                Chip(label: Text('Pendientes: $pendingCount')),
+                ChoiceChip(
+                  label: Text('Todos ($totalCount)'),
+                  selected: paymentStatusFilter == 'all',
+                  onSelected: (_) => onPaymentStatusChanged('all'),
+                ),
+                ChoiceChip(
+                  label: Text('Pagados: $paidCount'),
+                  selected: paymentStatusFilter == 'paid',
+                  onSelected: (_) => onPaymentStatusChanged('paid'),
+                ),
+                ChoiceChip(
+                  label: Text('Pendientes: $pendingCount'),
+                  selected: paymentStatusFilter == 'pending',
+                  onSelected: (_) => onPaymentStatusChanged('pending'),
+                ),
               ],
             ),
           ],

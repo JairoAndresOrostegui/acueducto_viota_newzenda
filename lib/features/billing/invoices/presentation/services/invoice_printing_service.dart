@@ -308,12 +308,21 @@ class _ReceiptPage extends pw.StatelessWidget {
 
   pw.Widget _detailAndSummarySection() {
     final serviceCharge = invoice.lineas.fold<int>(0, (sum, item) {
-      return item.descripcion.toLowerCase().contains('cargo fijo')
+      final description = item.descripcion.toLowerCase();
+      return description.contains('cargo fijo')
+          ? sum + item.valorTotal
+          : sum;
+    });
+    final additionalValue = invoice.lineas.fold<int>(0, (sum, item) {
+      final description = item.descripcion.toLowerCase();
+      return description.startsWith('valor adicional')
           ? sum + item.valorTotal
           : sum;
     });
     final consumptionValue = invoice.lineas.fold<int>(0, (sum, item) {
-      return item.descripcion.toLowerCase().contains('cargo fijo')
+      final description = item.descripcion.toLowerCase();
+      return description.contains('cargo fijo') ||
+              description.startsWith('valor adicional')
           ? sum
           : sum + item.valorTotal;
     });
@@ -342,6 +351,11 @@ class _ReceiptPage extends pw.StatelessWidget {
             children: [
               _summaryRow('CARGO FIJO', _formatCurrency(serviceCharge)),
               _summaryRow('CONSUMO', _formatCurrency(consumptionValue)),
+              if (additionalValue > 0)
+                _summaryRow(
+                  'VALOR ADICIONAL',
+                  _formatCurrency(additionalValue),
+                ),
               _summaryRow('SALDO ANTERIOR', _formatCurrency(invoice.saldoAnterior)),
               _summaryRow('RECONEXIÓN', _formatCurrency(invoice.reconexion)),
               _summaryRow(
@@ -664,22 +678,10 @@ class _ReceiptPage extends pw.StatelessWidget {
   }
 
   List<String> _observationLines() {
-    final snapshotLines = [
-      if ((invoice.avisoFacturacion ?? '').trim().isNotEmpty)
-        invoice.avisoFacturacion!.trim(),
-      ...invoice.observaciones
-          .map((item) => item.descripcion.trim())
-          .where((item) => item.isNotEmpty),
-    ];
-    if (snapshotLines.isNotEmpty) {
-      return snapshotLines;
-    }
-    final fallback = invoice.mensaje?.trim();
-    return [
-      if (fallback != null && fallback.isNotEmpty) fallback,
-      if (fallback == null || fallback.isEmpty)
-        'Sin observaciones registradas para este recibo.',
-    ];
+    return invoice.observaciones
+        .map((item) => item.descripcion.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
   }
 
   _StatusPresentation _statusPresentation(String? value) {

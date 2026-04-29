@@ -10,6 +10,7 @@ class ConsumptionReading {
     required this.codigoUsuario,
     required this.codigoContador,
     required this.nombreUsuario,
+    required this.sector,
     required this.lecturaActual,
     required this.periodoActual,
     required this.fecha,
@@ -32,6 +33,7 @@ class ConsumptionReading {
   final String codigoUsuario;
   final String codigoContador;
   final String nombreUsuario;
+  final String sector;
   final int lecturaActual;
   final String periodoActual;
   final DateTime fecha;
@@ -60,6 +62,7 @@ class ConsumptionReading {
       'codigoUsuario': codigoUsuario,
       'codigoContador': codigoContador,
       'nombreUsuario': nombreUsuario,
+      'sector': sector,
       'lecturaActual': lecturaActual,
       'periodoActual': periodoActual,
       'fecha': fecha.toIso8601String(),
@@ -85,6 +88,7 @@ class ConsumptionReading {
       'codigoUsuario': codigoUsuario,
       'codigoContador': codigoContador,
       'nombreUsuario': nombreUsuario,
+      'sector': sector,
       'lecturaActual': lecturaActual,
       'periodoActual': periodoActual,
       'fecha': Timestamp.fromDate(fecha),
@@ -110,6 +114,7 @@ class ConsumptionReading {
       codigoUsuario: data['codigoUsuario'] as String? ?? '',
       codigoContador: data['codigoContador'] as String? ?? '',
       nombreUsuario: data['nombreUsuario'] as String? ?? '',
+      sector: data['sector'] as String? ?? '',
       lecturaActual: data['lecturaActual'] as int? ?? 0,
       periodoActual: data['periodoActual'] as String? ?? '',
       fecha: DateTime.tryParse(data['fecha'] as String? ?? '') ?? DateTime.now(),
@@ -142,6 +147,7 @@ class ConsumptionReading {
       codigoUsuario: data['codigoUsuario'] as String? ?? '',
       codigoContador: data['codigoContador'] as String? ?? '',
       nombreUsuario: data['nombreUsuario'] as String? ?? '',
+      sector: data['sector'] as String? ?? '',
       lecturaActual: data['lecturaActual'] as int? ?? 0,
       periodoActual: data['periodoActual'] as String? ?? '',
       fecha: fecha is Timestamp ? fecha.toDate() : DateTime.now(),
@@ -183,6 +189,7 @@ class ConsumptionReading {
       codigoUsuario: codigoUsuario,
       codigoContador: codigoContador,
       nombreUsuario: nombreUsuario,
+      sector: sector,
       lecturaActual: lecturaActual ?? this.lecturaActual,
       periodoActual: periodoActual,
       fecha: fecha ?? this.fecha,

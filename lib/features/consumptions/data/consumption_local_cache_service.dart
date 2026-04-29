@@ -61,4 +61,9 @@ class ConsumptionLocalCacheService {
       jsonEncode(items.map((item) => item.toMap()).toList()),
     );
   }
+
+  Future<void> clearReadings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_readingsKey);
+  }
 }

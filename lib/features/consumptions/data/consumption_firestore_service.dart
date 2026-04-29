@@ -125,6 +125,40 @@ class ConsumptionFirestoreService {
     return null;
   }
 
+  Future<Map<String, ConsumptionReading>> fetchLatestPreviousReadingsByMeter({
+    required Iterable<String> meterCodes,
+    required String currentPeriod,
+  }) async {
+    final remaining = meterCodes
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    if (remaining.isEmpty) {
+      return const {};
+    }
+
+    final result = <String, ConsumptionReading>{};
+    final periods = await _fetchPeriodIds();
+    periods
+      ..removeWhere((period) => period.compareTo(currentPeriod) >= 0)
+      ..sort((a, b) => b.compareTo(a));
+
+    for (final period in periods) {
+      if (remaining.isEmpty) {
+        break;
+      }
+      final readings = await fetchReadingsForPeriod(period);
+      for (final reading in readings) {
+        if (!remaining.contains(reading.codigoContador)) {
+          continue;
+        }
+        result[reading.codigoContador] = reading;
+        remaining.remove(reading.codigoContador);
+      }
+    }
+    return result;
+  }
+
   Future<List<ConsumptionReading>> fetchSubsequentReadings({
     required String meterCode,
     required String fromPeriodExclusive,
@@ -165,6 +199,43 @@ class ConsumptionFirestoreService {
         );
       }
     });
+  }
+
+  Future<void> saveReadingsBatch({
+    required List<ConsumptionReading> readings,
+    required List<ConsumptionHistoryEntry?> historyEntries,
+  }) async {
+    if (readings.isEmpty) {
+      return;
+    }
+    if (readings.length != historyEntries.length) {
+      throw ArgumentError('Las lecturas y sus historiales no coinciden.');
+    }
+
+    const maxReadingsPerBatch = 240;
+    for (var start = 0; start < readings.length; start += maxReadingsPerBatch) {
+      final end = (start + maxReadingsPerBatch) > readings.length
+          ? readings.length
+          : start + maxReadingsPerBatch;
+      final batch = _db.batch();
+      for (var index = start; index < end; index++) {
+        final reading = readings[index];
+        batch.set(
+          _periodConsumptions(reading.periodoActual).doc(reading.codigoContador),
+          reading.toFirestore(),
+          SetOptions(merge: true),
+        );
+        final historyEntry = historyEntries[index];
+        if (historyEntry != null) {
+          batch.set(
+            _historyCollection(reading.periodoActual, reading.codigoContador)
+                .doc(historyEntry.id),
+            historyEntry.toFirestore(),
+          );
+        }
+      }
+      await batch.commit();
+    }
   }
 
   Future<void> appendHistory(

@@ -10,6 +10,7 @@ import '../../data/consumption_firestore_service.dart';
 import '../../domain/consumption_conflict.dart';
 import '../../domain/consumption_history_entry.dart';
 import '../../domain/consumption_reading.dart';
+import '../../../users/data/user_firestore_service.dart';
 import '../../../users/domain/app_user.dart';
 
 class ConsumptionConflictsAdminPage extends StatefulWidget {
@@ -35,9 +36,11 @@ class _ConsumptionConflictsAdminPageState
       widget.conflictService ?? ConsumptionConflictFirestoreService();
   late final ConsumptionFirestoreService _firestoreService =
       widget.firestoreService ?? ConsumptionFirestoreService();
+  late final UserFirestoreService _userService = UserFirestoreService();
 
   bool _isBusy = false;
   List<ConsumptionConflict> _items = const [];
+  Map<String, String> _sectorsByUserCode = const {};
 
   @override
   void initState() {
@@ -68,6 +71,7 @@ class _ConsumptionConflictsAdminPageState
                           final item = _items[index];
                           return _ConflictCard(
                             item: item,
+                            sector: _sectorFor(item),
                             onResolve: () => _resolve(item),
                           );
                         },
@@ -90,16 +94,39 @@ class _ConsumptionConflictsAdminPageState
   Future<void> _load() async {
     setState(() => _isBusy = true);
     try {
-      final items = await _conflictService.fetchPendingConflicts();
+      final results = await Future.wait([
+        _conflictService.fetchPendingConflicts(),
+        _userService.fetchAllUsers(batchSize: 500),
+      ]);
+      final items = results[0] as List<ConsumptionConflict>;
+      final users = results[1] as List<AppUser>;
+      final sectorsByUserCode = {
+        for (final user in users)
+          if (user.codigoUsuario.trim().isNotEmpty)
+            user.codigoUsuario.trim().toUpperCase(): user.sector,
+      };
       if (!mounted) {
         return;
       }
-      setState(() => _items = items);
+      setState(() {
+        _items = items;
+        _sectorsByUserCode = sectorsByUserCode;
+      });
     } finally {
       if (mounted) {
         setState(() => _isBusy = false);
       }
     }
+  }
+
+  String _sectorFor(ConsumptionConflict item) {
+    final fromReading = item.lecturaPropuesta.sector.trim();
+    if (fromReading.isNotEmpty) {
+      return fromReading;
+    }
+    return _sectorsByUserCode[
+            item.lecturaPropuesta.codigoUsuario.trim().toUpperCase()] ??
+        '';
   }
 
   Future<void> _resolve(ConsumptionConflict conflict) async {
@@ -191,6 +218,14 @@ class _ConsumptionConflictsAdminPageState
   }
 }
 
+String _displaySector(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty || normalized.toLowerCase() == 'na') {
+    return 'Sin sector';
+  }
+  return toDisplayText(normalized);
+}
+
 class _ConflictsHeader extends StatelessWidget {
   const _ConflictsHeader({
     required this.pendingCount,
@@ -237,10 +272,12 @@ class _ConflictsHeader extends StatelessWidget {
 class _ConflictCard extends StatelessWidget {
   const _ConflictCard({
     required this.item,
+    required this.sector,
     required this.onResolve,
   });
 
   final ConsumptionConflict item;
+  final String sector;
   final VoidCallback onResolve;
 
   @override
@@ -264,6 +301,8 @@ class _ConflictCard extends StatelessWidget {
           Text(
             'Código usuario: ${item.lecturaPropuesta.codigoUsuario} - Contador: ${item.lecturaPropuesta.codigoContador}',
           ),
+          const SizedBox(height: 6),
+          Text('Sector: ${_displaySector(sector)}'),
           const SizedBox(height: 6),
           Text(
             'Período: ${item.lecturaPropuesta.periodoActual} - Motivo: ${_motivoLabel(item.motivo)}',

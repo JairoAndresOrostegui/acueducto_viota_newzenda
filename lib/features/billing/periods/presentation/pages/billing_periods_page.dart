@@ -19,7 +19,7 @@ class BillingPeriodsPage extends StatefulWidget {
 }
 
 class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
-  static const int _startYear = 2025;
+  static const int _startYear = BillingPeriodFirestoreService.firstAllowedYear;
 
   late final BillingPeriodFirestoreService _service =
       widget.service ?? BillingPeriodFirestoreService();
@@ -37,9 +37,17 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        StreamBuilder<List<BillingPeriod>>(
+    final baseTheme = Theme.of(context);
+    return Theme(
+      data: baseTheme.copyWith(
+        textTheme: baseTheme.textTheme.apply(
+          bodyColor: Colors.black,
+          displayColor: Colors.black,
+        ),
+      ),
+      child: Stack(
+        children: [
+          StreamBuilder<List<BillingPeriod>>(
           stream: _service.watchPeriods(),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
@@ -58,7 +66,10 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
                 .where((period) => period.ano == _selectedYear)
                 .toList();
             final allowedMonths = _allowedMonthsForYear(_selectedYear);
-            final generatedMonths = selectedPeriods.map((item) => item.mes).toSet();
+            final generatedMonths = selectedPeriods
+                .where((item) => allowedMonths.contains(item.mes))
+                .map((item) => item.mes)
+                .toSet();
             final missingMonths = allowedMonths
                 .where((month) => !generatedMonths.contains(month))
                 .toList();
@@ -219,30 +230,29 @@ class _BillingPeriodsPageState extends State<BillingPeriodsPage> {
             );
           },
         ),
-        if (_isSaving)
-          Positioned.fill(
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                child: ColoredBox(
-                  color: AppColors.textPrimary.withValues(alpha: 0.18),
-                  child: const Center(child: _SavingOverlay()),
+          if (_isSaving)
+            Positioned.fill(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                  child: ColoredBox(
+                    color: AppColors.textPrimary.withValues(alpha: 0.18),
+                    child: const Center(child: _SavingOverlay()),
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
   List<int> _allowedMonthsForYear(int year) {
     final now = DateTime.now();
-    if (year < now.year) {
-      return List<int>.generate(12, (index) => index + 1);
-    }
-
-    final maxMonth = now.month == 12 ? 12 : now.month + 1;
-    return List<int>.generate(maxMonth, (index) => index + 1);
+    final maxMonth = year < now.year ? 12 : (now.month == 12 ? 12 : now.month + 1);
+    return List<int>.generate(maxMonth, (index) => index + 1)
+        .where((month) => BillingPeriodFirestoreService.isAllowedPeriod(year, month))
+        .toList();
   }
 
   Future<void> _createSinglePeriod({
@@ -451,14 +461,25 @@ class _MetricCard extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8),
-          Text(value, style: Theme.of(context).textTheme.headlineMedium),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+              ),
+            ],
+          ),
     );
   }
 }

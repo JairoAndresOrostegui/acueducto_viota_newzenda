@@ -51,11 +51,14 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  String _search = '';
+  String _searchField = 'nombre';
   List<BillingPeriod> _periods = const [];
   BillingPeriod? _selectedPeriod;
   List<ConsumptionReading> _readings = const [];
   List<Invoice> _invoices = const [];
   String? _selectedSectorFilter;
+  final TextEditingController _searchController = TextEditingController();
 
   List<ConsumptionReading> get _billableReadings => _readings
       .where(
@@ -75,6 +78,15 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       )
       .toList();
 
+  List<ConsumptionReading> get _filteredBillableReadings {
+    final query = _search.trim().toLowerCase();
+    final readings = _billableReadings;
+    if (query.isEmpty) {
+      return readings;
+    }
+    return readings.where((item) => _matchesReadingSearch(item, query)).toList();
+  }
+
   List<String> get _availableSectors => _invoices
       .map((item) => _displaySector(item.sector))
       .where((item) => item.isNotEmpty && item != 'No registrado')
@@ -84,18 +96,30 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
   List<Invoice> get _filteredInvoices {
     final sector = _selectedSectorFilter;
-    if (sector == null || sector.isEmpty) {
-      return _invoices;
-    }
-    return _invoices
-        .where((item) => _displaySector(item.sector) == sector)
-        .toList();
+    final query = _search.trim().toLowerCase();
+    return _invoices.where((item) {
+      if (sector != null &&
+          sector.isNotEmpty &&
+          _displaySector(item.sector) != sector) {
+        return false;
+      }
+      if (query.isEmpty) {
+        return true;
+      }
+      return _matchesInvoiceSearch(item, query);
+    }).toList();
   }
 
   @override
   void initState() {
     super.initState();
     _loadPeriods();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPeriods() async {
@@ -157,7 +181,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
   Future<void> _generateInvoices() async {
     final period = _selectedPeriod;
-    final billableReadings = _billableReadings;
+    final billableReadings = _filteredBillableReadings;
     final unpreparedReadings = _unpreparedReadings;
     if (period == null || billableReadings.isEmpty) {
       return;
@@ -595,9 +619,25 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
         .join(' ');
   }
 
+  bool _matchesInvoiceSearch(Invoice item, String query) {
+    return switch (_searchField) {
+      'codigoUsuario' => item.codigoUsuario.toLowerCase().contains(query),
+      'contador' => item.codigoContador.toLowerCase().contains(query),
+      _ => item.nombreUsuario.toLowerCase().contains(query),
+    };
+  }
+
+  bool _matchesReadingSearch(ConsumptionReading item, String query) {
+    return switch (_searchField) {
+      'codigoUsuario' => item.codigoUsuario.toLowerCase().contains(query),
+      'contador' => item.codigoContador.toLowerCase().contains(query),
+      _ => item.nombreUsuario.toLowerCase().contains(query),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final billableReadings = _billableReadings;
+    final billableReadings = _filteredBillableReadings;
     final unpreparedReadings = _unpreparedReadings;
     final availableSectors = _availableSectors;
     final filteredInvoices = _filteredInvoices;
@@ -670,6 +710,30 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                     : _showUnpreparedReadings,
               ),
               const SizedBox(height: 16),
+              TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _search = value.trim()),
+                decoration: InputDecoration(
+                  labelText: 'Buscar en facturacion',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _search.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _search = '');
+                          },
+                          tooltip: 'Limpiar busqueda',
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _InvoiceSearchFieldSelector(
+                selected: _searchField,
+                onChanged: (value) => setState(() => _searchField = value),
+              ),
+              const SizedBox(height: 12),
               if (availableSectors.isNotEmpty) ...[
                 Wrap(
                   spacing: 8,
@@ -720,6 +784,55 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _InvoiceSearchFieldSelector extends StatelessWidget {
+  const _InvoiceSearchFieldSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  static const _options = [
+    ('nombre', 'Nombre'),
+    ('codigoUsuario', 'Codigo usuario'),
+    ('contador', 'Codigo contador'),
+  ];
+
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioGroup<String>(
+      groupValue: selected,
+      onChanged: (value) {
+        if (value != null) {
+          onChanged(value);
+        }
+      },
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final option in _options)
+            InkWell(
+              onTap: () => onChanged(option.$1),
+              borderRadius: BorderRadius.circular(20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Radio<String>(
+                    value: option.$1,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  Text(option.$2),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -949,11 +1062,6 @@ class _InvoicePreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'ASOCIACION DE USUARIOS DEL ACUEDUCTO DE LAS VEREDAS DE QUITASOL Y JAZMIN',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,
             child: OutlinedButton.icon(
@@ -967,8 +1075,6 @@ class _InvoicePreviewCard extends StatelessWidget {
               label: const Text('PDF'),
             ),
           ),
-          const SizedBox(height: 4),
-          const Text('Municipio de Viota - NIT 808.000.868-7'),
           const SizedBox(height: 14),
           Wrap(
             spacing: 18,
@@ -1006,19 +1112,10 @@ class _InvoicePreviewCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 24),
-          if (invoice.mediosPagoTexto.isNotEmpty) ...[
-            Text('Medios de pago', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text(invoice.mediosPagoTexto),
-            const SizedBox(height: 12),
-          ],
           Row(
             children: [
               Expanded(
-                child: Text(
-                  invoice.mensaje ?? '',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                child: Text('Estado: ${toDisplayText(invoice.estado)}'),
               ),
               const SizedBox(width: 16),
               Text(
@@ -1076,43 +1173,11 @@ class _HeaderPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact =
-            !constraints.hasBoundedWidth || constraints.maxWidth < 920;
         final periodValue = periods.contains(selectedPeriod)
             ? selectedPeriod
             : null;
 
-        final overviewCard = Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Facturacion', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Selecciona un periodo, genera los recibos listos y usa las acciones masivas desde este panel.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _Metric(label: 'Pendientes listos', value: '$billableCount'),
-                  _Metric(label: 'No preparados', value: '$unpreparedCount'),
-                  _Metric(label: 'Recibos', value: '$invoiceCount'),
-                ],
-              ),
-            ],
-          ),
-        );
-
-        final controlCard = Container(
+        return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -1123,6 +1188,15 @@ class _HeaderPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Periodo de trabajo', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _Metric(label: 'Pendientes listos', value: '$billableCount'),
+                  _Metric(label: 'Recibos', value: '$invoiceCount'),
+                ],
+              ),
               const SizedBox(height: 12),
               DropdownButtonFormField<BillingPeriod>(
                 isExpanded: true,
@@ -1188,37 +1262,17 @@ class _HeaderPanel extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onShowUnprepared,
                     style: OutlinedButton.styleFrom(
-                      fixedSize: const Size(170, 48),
-                      minimumSize: const Size(170, 48),
-                      maximumSize: const Size(170, 48),
+                      fixedSize: const Size(190, 48),
+                      minimumSize: const Size(190, 48),
+                      maximumSize: const Size(190, 48),
                     ),
                     icon: const Icon(Icons.playlist_add_check_circle_outlined),
-                    label: const Text('No preparados'),
+                    label: Text('No preparados ($unpreparedCount)'),
                   ),
                 ],
               ),
             ],
           ),
-        );
-
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              overviewCard,
-              const SizedBox(height: 12),
-              controlCard,
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 5, child: overviewCard),
-            const SizedBox(width: 12),
-            Expanded(flex: 6, child: controlCard),
-          ],
         );
       },
     );

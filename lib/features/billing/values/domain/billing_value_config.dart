@@ -28,6 +28,55 @@ class ConsumptionRange {
   }
 }
 
+class AdditionalBillingValue {
+  const AdditionalBillingValue({
+    required this.periodoId,
+    required this.periodoNombre,
+    required this.concepto,
+    required this.valor,
+    this.codigoUsuario,
+  });
+
+  final String periodoId;
+  final String periodoNombre;
+  final String concepto;
+  final int valor;
+  final String? codigoUsuario;
+
+  bool get isMassive => (codigoUsuario ?? '').trim().isEmpty;
+
+  bool appliesTo({
+    required String periodId,
+    required String userCode,
+  }) {
+    if (periodoId.trim() != periodId.trim()) {
+      return false;
+    }
+    final code = (codigoUsuario ?? '').trim().toUpperCase();
+    return code.isEmpty || code == userCode.trim().toUpperCase();
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'periodoId': periodoId,
+      'periodoNombre': periodoNombre,
+      'concepto': concepto,
+      'valor': valor,
+      'codigoUsuario': codigoUsuario,
+    };
+  }
+
+  factory AdditionalBillingValue.fromMap(Map<String, dynamic> data) {
+    return AdditionalBillingValue(
+      periodoId: data['periodoId'] as String? ?? '',
+      periodoNombre: data['periodoNombre'] as String? ?? '',
+      concepto: data['concepto'] as String? ?? '',
+      valor: data['valor'] as int? ?? 0,
+      codigoUsuario: data['codigoUsuario'] as String?,
+    );
+  }
+}
+
 class BillingValueConfig {
   const BillingValueConfig({
     required this.id,
@@ -36,6 +85,7 @@ class BillingValueConfig {
     required this.cargoFijo,
     required this.reconexion,
     required this.rangos,
+    this.valoresAdicionales = const [],
     required this.actorUid,
     required this.actorNombre,
     required this.fechaCreacion,
@@ -48,6 +98,7 @@ class BillingValueConfig {
   final int cargoFijo;
   final int reconexion;
   final List<ConsumptionRange> rangos;
+  final List<AdditionalBillingValue> valoresAdicionales;
   final String actorUid;
   final String actorNombre;
   final DateTime fechaCreacion;
@@ -63,6 +114,17 @@ class BillingValueConfig {
         .whereType<Map<String, dynamic>>()
         .map(ConsumptionRange.fromMap)
         .toList();
+    final additionalValues =
+        (data['valoresAdicionales'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(AdditionalBillingValue.fromMap)
+            .where(
+              (item) =>
+                  item.periodoId.trim().isNotEmpty &&
+                  item.concepto.trim().isNotEmpty &&
+                  item.valor > 0,
+            )
+            .toList();
 
     return BillingValueConfig(
       id: doc.id,
@@ -71,6 +133,7 @@ class BillingValueConfig {
       cargoFijo: data['cargoFijo'] as int? ?? 0,
       reconexion: data['reconexion'] as int? ?? 0,
       rangos: ranges,
+      valoresAdicionales: additionalValues,
       actorUid: data['actorUid'] as String? ?? '',
       actorNombre: data['actorNombre'] as String? ?? '',
       fechaCreacion: _toDateTime(data['fechaCreacion']) ?? DateTime.now(),
@@ -85,6 +148,8 @@ class BillingValueConfig {
       'cargoFijo': cargoFijo,
       'reconexion': reconexion,
       'rangos': rangos.map((item) => item.toMap()).toList(),
+      'valoresAdicionales':
+          valoresAdicionales.map((item) => item.toMap()).toList(),
       'actorUid': actorUid,
       'actorNombre': actorNombre,
       'fechaCreacion': Timestamp.fromDate(fechaCreacion),
