@@ -8,6 +8,7 @@ import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/cata
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_conflicts_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_import_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_payments_page.dart';
+import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_suspensions_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_reports_admin_page.dart';
 
@@ -177,6 +178,12 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
           const _AdminScreen(
             title: 'Registrar pagos',
             child: ConsumptionPaymentsPage(),
+          ),
+          _AdminScreen(
+            title: 'Suspensiones',
+            child: ConsumptionSuspensionsAdminPage(
+              currentUser: widget.currentUser,
+            ),
           ),
         ],
       ),

@@ -502,7 +502,7 @@ class _ConsumptionReportsAdminPageState
 }
 
 int _invoiceTotalToPay(Invoice invoice) {
-  return invoice.total + invoice.saldoAnterior + invoice.reconexion;
+  return invoice.totalAPagar;
 }
 
 @immutable

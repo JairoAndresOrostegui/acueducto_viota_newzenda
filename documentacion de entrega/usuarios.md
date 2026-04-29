@@ -9,10 +9,11 @@ Ruta de acceso para administrador:
 Pantallas implementadas:
 
 1. `Usuarios`
-2. `Tipos documento`
-3. `Roles`
-4. `Sectores`
-5. `Logs`
+2. `Importar usuarios`
+3. `Tipos documento`
+4. `Roles`
+5. `Sectores`
+6. `Logs`
 
 Servicios involucrados:
 
@@ -137,6 +138,46 @@ Cloud Functions agrega validaciones adicionales:
 7. Editar un usuario y cambiar su estado.
 8. Cambiar la clave de un usuario existente.
 9. Intentar eliminar al usuario autenticado.
+
+## Pantalla Importar usuarios
+
+Archivo principal:
+
+- `lib/features/users/presentation/pages/users_import_page.dart`
+
+### Objetivo
+
+Importar usuarios cliente desde una plantilla Excel.
+
+### Columnas esperadas
+
+- `tipousuario`
+- `sector`
+- `numcontador`
+- `codigousuario`
+- `documento`
+- `celular`
+- `nombre`
+- `correo`
+
+### Reglas reales
+
+- El rol se guarda como `cliente`.
+- El estado se guarda como `activo`.
+- El tipo de documento se guarda como `cc`.
+- El correo se normaliza a minuscula.
+- El numero de contador y el codigo de usuario se normalizan a mayuscula.
+- La importacion usa Cloud Functions y respeta las validaciones de unicidad.
+
+### Flujo
+
+1. Entrar a `Usuarios > Importar usuarios`.
+2. Descargar plantilla Excel.
+3. Diligenciar los registros.
+4. Seleccionar archivo.
+5. Revisar vista previa.
+6. Presionar `Importar registros`.
+7. Revisar resumen de importados y errores.
 
 ## Pantalla Tipos documento
 

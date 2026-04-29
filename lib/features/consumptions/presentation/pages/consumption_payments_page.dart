@@ -28,6 +28,8 @@ class ConsumptionPaymentsPage extends StatefulWidget {
 }
 
 class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
+  static const String _accountingStartPeriodId = '2026-01';
+
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
   late final InvoiceFirestoreService _invoiceService =
@@ -71,6 +73,8 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
       ]);
       final periods = results[0] as List<BillingPeriod>;
       final paymentMethods = results[1] as List<PaymentMethod>;
+      final billablePeriods =
+          periods.where((item) => item.id.compareTo(_accountingStartPeriodId) >= 0).toList();
       final selected = periods.isEmpty
           ? null
           : periods.firstWhere(
@@ -78,12 +82,14 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
               orElse: () => periods.first,
             );
       setState(() {
-        _periods = periods;
+        _periods = billablePeriods;
         _paymentMethods = _withBuiltInPaymentMethods(paymentMethods);
-        _selectedPeriod = selected;
+        _selectedPeriod = billablePeriods.contains(selected)
+            ? selected
+            : (billablePeriods.isEmpty ? null : billablePeriods.first);
       });
-      if (selected != null) {
-        await _loadInvoices(selected);
+      if (_selectedPeriod != null) {
+        await _loadInvoices(_selectedPeriod!);
       }
     } catch (error) {
       setState(() => _error = '$error');
@@ -510,7 +516,9 @@ class _PaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = invoice.pagado
+    final statusColor = invoice.estaSuspendido
+        ? Colors.red.shade800
+        : invoice.pagado
         ? Colors.green.shade800
         : Colors.orange.shade800;
     return Container(
@@ -519,7 +527,9 @@ class _PaymentCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: invoice.pagado
+          color: invoice.estaSuspendido
+              ? Colors.red.shade200
+              : invoice.pagado
               ? Colors.green.shade200
               : Colors.orange.shade200,
         ),
@@ -540,12 +550,17 @@ class _PaymentCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Total recibo: ${_formatCurrency(invoice.total)} · Vence: ${_formatDate(invoice.fechaVencimiento)}',
+                'Total a pagar: ${_formatCurrency(invoice.totalAPagar)} · Vence: ${_formatDate(invoice.fechaVencimiento)}',
               ),
               const SizedBox(height: 6),
+              if (invoice.saldoAnterior > 0)
+                Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
+              if (invoice.saldoAnterior > 0) const SizedBox(height: 6),
               Text(
-                invoice.pagado
-                    ? 'Estado: pagado · Valor pagado: ${_formatCurrency(invoice.valorPagado ?? invoice.total)}'
+                invoice.estaSuspendido
+                    ? 'Estado: suspendido Â· Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'
+                    : invoice.pagado
+                    ? 'Estado: pagado · Valor pagado: ${_formatCurrency(invoice.valorPagado ?? invoice.totalAPagar)}'
                     : 'Estado: facturado pendiente de pago',
                 style: Theme.of(
                   context,
@@ -554,7 +569,7 @@ class _PaymentCard extends StatelessWidget {
               if (!invoice.pagado) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Valor a registrar: ${_formatCurrency(invoice.total)}',
+                  'Valor a registrar: ${_formatCurrency(invoice.totalAPagar)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -613,7 +628,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   void initState() {
     super.initState();
     _valueController.text =
-        '${widget.invoice.valorPagado ?? widget.invoice.total}';
+        '${widget.invoice.valorPagado ?? widget.invoice.totalAPagar}';
     _observationsController.text = widget.invoice.observacionesPago ?? '';
     if ((widget.invoice.medioPagoId ?? '').isNotEmpty) {
       final matches = widget.paymentMethods.where(
@@ -651,7 +666,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${toDisplayUserName(widget.invoice.nombreUsuario)} · ${_formatCurrency(widget.invoice.total)}',
+                  '${toDisplayUserName(widget.invoice.nombreUsuario)} · ${_formatCurrency(widget.invoice.totalAPagar)}',
                 ),
                 const SizedBox(height: 16),
                 SwitchListTile(
@@ -678,7 +693,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _formatCurrency(widget.invoice.total),
+                        _formatCurrency(widget.invoice.totalAPagar),
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 4),

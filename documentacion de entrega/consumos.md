@@ -12,14 +12,17 @@ Pantallas implementadas:
 
 1. `Conflictos`
 2. `Registrar consumos`
-3. `Reportes`
-4. `Registrar pagos`
+3. `Importar consumos`
+4. `Reportes`
+5. `Registrar pagos`
+6. `Suspensiones`
 
 Servicios involucrados:
 
 - `ConsumptionFirestoreService`
 - `ConsumptionConflictFirestoreService`
 - `ConsumptionLocalCacheService`
+- `ConsumptionImportFunctionsService`
 - `BillingPeriodFirestoreService`
 - `UserFirestoreService`
 - `InvoiceFirestoreService`
@@ -32,43 +35,68 @@ Colecciones relacionadas:
 - `consumos_conflictos`
 - `periodos/{periodo}/recibos`
 
-## Pantalla Registrar consumos
-
-Archivo principal:
-
-- `lib/features/consumptions/presentation/pages/consumption_register_page.dart`
-
-### Objetivo
-
-Permitir al operador descargar un periodo, trabajar localmente y luego sincronizar.
-
-### Reglas importantes
-
-- el operador no trabaja directamente sobre Firestore
-- primero descarga el periodo vigente al dispositivo
-- no puede descargar otro periodo si hay lecturas locales pendientes
-- no puede registrar lectura sobre consumos ya facturados o pagados
-
-### Resultado del guardado local
-
-- sin irregularidad: `estado = pendiente_local`
-- con irregularidad: `estado = pendiente_revision`
-
 ## Pantalla Conflictos
 
 Archivo principal:
 
 - `lib/features/consumptions/presentation/pages/consumption_conflicts_admin_page.dart`
 
-### Objetivo
+Objetivo:
 
-Resolver conflictos de lectura detectados durante la sincronizacion.
+- Resolver conflictos de lectura detectados durante la sincronizacion.
 
-### Reglas reales
+Reglas:
 
-- si el consumo ya esta `facturado` o `pagado`, no se modifica
-- si se corrige una lectura anterior, el sistema recalcula periodos siguientes no bloqueados
-- si en la cascada encuentra un periodo ya facturado o pagado, se detiene
+- Si el consumo ya esta `facturado` o `pagado`, no se modifica.
+- Puede conservarse la lectura existente, usar la entrante o ingresar valor manual.
+- Si se corrige una lectura anterior, el sistema recalcula periodos siguientes no bloqueados.
+- Si la cascada encuentra un periodo facturado o pagado, se detiene.
+
+## Pantalla Registrar consumos
+
+Archivo principal:
+
+- `lib/features/consumptions/presentation/pages/consumption_register_page.dart`
+
+Objetivo:
+
+- Permitir al operador descargar un periodo, trabajar localmente y sincronizar lecturas.
+
+Reglas:
+
+- El operador no trabaja directamente sobre Firestore.
+- Primero descarga el periodo vigente al dispositivo.
+- No puede descargar otro periodo si hay lecturas locales pendientes.
+- No puede registrar lectura sobre consumos facturados, pagados o bloqueados.
+
+Resultado local:
+
+- sin irregularidad: `estado = pendiente_local`
+- con irregularidad: `estado = pendiente_revision`
+
+## Pantalla Importar consumos
+
+Archivo principal:
+
+- `lib/features/consumptions/presentation/pages/consumption_import_page.dart`
+
+Objetivo:
+
+- Cargar lecturas desde Excel para un periodo especifico.
+
+Formato:
+
+- Columna `codigousuario`.
+- Una columna cuyo encabezado sea el periodo real, por ejemplo `2026-01`.
+- El valor de esa columna es la lectura actual.
+
+Acciones:
+
+- Descargar plantilla Excel.
+- Seleccionar archivo.
+- Vista previa de filas.
+- Importar consumos.
+- Descargar filas ignoradas cuando aplique.
 
 ## Pantalla Reportes
 
@@ -76,17 +104,17 @@ Archivo principal:
 
 - `lib/features/consumptions/presentation/pages/consumption_reports_admin_page.dart`
 
-### Objetivo
+Objetivo:
 
-Consultar lecturas registradas y revisar cartera pendiente con el mismo filtro.
+- Consultar lecturas registradas y revisar cartera pendiente.
 
-### Filtros implementados
+Filtros:
 
 - periodo `YYYY-MM` o vacio
 - codigo de usuario o vacio
-- `Solo irregularidades`
+- solo irregularidades
 
-### Que muestra
+Muestra:
 
 - total de lecturas consultadas
 - total de recibos pendientes
@@ -94,9 +122,7 @@ Consultar lecturas registradas y revisar cartera pendiente con el mismo filtro.
 - listado de lecturas
 - listado de cartera pendiente
 
-### Informe de cartera pendiente
-
-El panel lateral muestra para cada recibo:
+Informe de cartera:
 
 - usuario
 - codigo de usuario
@@ -105,12 +131,13 @@ El panel lateral muestra para cada recibo:
 - estado
 - fecha de vencimiento
 - total facturado
+- saldo anterior
 - valor registrado
 - saldo pendiente
 
-### Exportacion CSV
+Exportacion:
 
-Se mantiene para lecturas consultadas.
+- CSV de lecturas consultadas.
 
 ## Pantalla Registrar pagos
 
@@ -118,47 +145,76 @@ Archivo principal:
 
 - `lib/features/consumptions/presentation/pages/consumption_payments_page.dart`
 
-### Objetivo
+Objetivo:
 
-Registrar o revertir pagos de recibos ya facturados.
+- Registrar o revertir pagos de recibos facturados.
 
-### Que muestra
+Reglas:
 
-- selector de periodo
-- contadores de pagados y pendientes
-- lista de recibos del periodo
-- valor del recibo
-- estado del pago
+- Solo se muestran periodos desde `2026-01`.
+- El valor base de pago es `totalAPagar`, que incluye total facturado, saldo anterior y reconexion.
+- Los recibos suspendidos se muestran con estado diferenciado.
 
-### Flujo Registrar pago
+Flujo:
 
-1. seleccionar periodo
-2. ubicar recibo
-3. presionar `Registrar pago`
-4. marcar pago
-5. ver `Valor del recibo`
-6. ingresar `Valor pagado`
-7. opcionalmente seleccionar medio de pago
-8. opcionalmente registrar observaciones
-9. guardar
+1. Seleccionar periodo.
+2. Ubicar recibo.
+3. Presionar `Registrar pago` o `Cambiar estado`.
+4. Marcar pago.
+5. Confirmar valor pagado.
+6. Seleccionar medio de pago si aplica.
+7. Registrar observaciones si aplica.
+8. Guardar.
 
-### Efecto tecnico
+Efecto tecnico:
 
-`InvoiceFirestoreService.updatePaymentStatus` actualiza en dos lados:
+`InvoiceFirestoreService.updatePaymentStatus` actualiza:
 
-- `periodos/{periodo}/recibos`
-- `periodos/{periodo}/consumos`
+- `periodos/{periodo}/recibos/{reciboId}`
+- `periodos/{periodo}/consumos/{codigoContador}`
 
 Campos sincronizados:
 
 - `pagado`
 - `estado`
+- `reciboId`
 - `valorPagado`
 - `fechaPago`
 - `medioPagoId`
 - `medioPagoDescripcion`
 - `observacionesPago`
 
+## Pantalla Suspensiones
+
+Archivo principal:
+
+- `lib/features/consumptions/presentation/pages/consumption_suspensions_admin_page.dart`
+
+Objetivo:
+
+- Suspender facturas no pagadas que ya vienen en mora del periodo anterior.
+
+Reglas:
+
+- Solo se muestran periodos desde `2026-01`.
+- `2025-12` queda fuera de cartera y sirve como base historica.
+- Solo se habilita el boton `Suspender` si `estadoPeriodoAnterior = en_mora`.
+- No se suspende una factura pagada.
+- Una factura ya suspendida no se vuelve a procesar.
+
+Filtros:
+
+- nombre
+- codigo de usuario
+- codigo de contador
+
+Efecto tecnico:
+
+`InvoiceFirestoreService.suspendInvoice` actualiza:
+
+- recibo: `estado = suspendido`
+- consumo: `estado = suspendido`, `pagado = false`, `facturado = true`, `reciboId`, `detalleEstado`
+
 ## Estado del modulo
 
-El modulo de consumos quedo operativo para captura, conflictos, reportes y pagos.
+El modulo de consumos queda operativo para captura, importacion, conflictos, reportes, pagos y suspensiones.

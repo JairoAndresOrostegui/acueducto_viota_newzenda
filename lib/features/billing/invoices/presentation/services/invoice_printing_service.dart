@@ -326,7 +326,7 @@ class _ReceiptPage extends pw.StatelessWidget {
           ? sum
           : sum + item.valorTotal;
     });
-    final totalToPay = invoice.total + invoice.saldoAnterior + invoice.reconexion;
+    final totalToPay = invoice.totalAPagar;
 
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,

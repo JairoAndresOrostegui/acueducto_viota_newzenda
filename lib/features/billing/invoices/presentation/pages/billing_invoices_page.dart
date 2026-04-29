@@ -36,6 +36,8 @@ class BillingInvoicesPage extends StatefulWidget {
 }
 
 class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
+  static const String _accountingStartPeriodId = '2026-01';
+
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
   late final ConsumptionFirestoreService _consumptionService =
@@ -129,6 +131,8 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     });
     try {
       final periods = await _periodService.fetchPeriods();
+      final billablePeriods =
+          periods.where((item) => item.id.compareTo(_accountingStartPeriodId) >= 0).toList();
       final selected = periods.isEmpty
           ? null
           : periods.firstWhere(
@@ -136,11 +140,13 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
               orElse: () => periods.first,
             );
       setState(() {
-        _periods = periods;
-        _selectedPeriod = selected;
+        _periods = billablePeriods;
+        _selectedPeriod = billablePeriods.contains(selected)
+            ? selected
+            : (billablePeriods.isEmpty ? null : billablePeriods.first);
       });
-      if (selected != null) {
-        await _loadPeriodData(selected);
+      if (_selectedPeriod != null) {
+        await _loadPeriodData(_selectedPeriod!);
       }
     } catch (error) {
       setState(() => _error = '$error');
@@ -1081,16 +1087,20 @@ class _InvoicePreviewCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _LabelValue(label: 'Codigo usuario', value: invoice.codigoUsuario),
-              _LabelValue(label: 'Contador', value: invoice.codigoContador),
-              _LabelValue(label: 'Usuario', value: toDisplayUserName(invoice.nombreUsuario)),
-              _LabelValue(label: 'Periodo facturado', value: invoice.periodo),
-              _LabelValue(label: 'Generado', value: _formatDate(invoice.fechaGeneracion)),
-              _LabelValue(label: 'Vence', value: _formatDate(invoice.fechaVencimiento)),
-              _LabelValue(label: 'Consumo mes m3', value: '${invoice.consumoM3}'),
-              _LabelValue(label: 'Lectura anterior', value: '${invoice.lecturaAnterior ?? '-'}'),
-              _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
-            ],
-          ),
+          _LabelValue(label: 'Contador', value: invoice.codigoContador),
+          _LabelValue(label: 'Usuario', value: toDisplayUserName(invoice.nombreUsuario)),
+          _LabelValue(label: 'Periodo facturado', value: invoice.periodo),
+          _LabelValue(label: 'Generado', value: _formatDate(invoice.fechaGeneracion)),
+          _LabelValue(label: 'Vence', value: _formatDate(invoice.fechaVencimiento)),
+          _LabelValue(label: 'Consumo mes m3', value: '${invoice.consumoM3}'),
+          _LabelValue(label: 'Lectura anterior', value: '${invoice.lecturaAnterior ?? '-'}'),
+          _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
+        ],
+      ),
+          if (invoice.saldoAnterior > 0) ...[
+            const SizedBox(height: 14),
+            Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
+          ],
           const SizedBox(height: 14),
           ...invoice.lineas.map(
             (item) => Padding(
@@ -1115,11 +1125,13 @@ class _InvoicePreviewCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('Estado: ${toDisplayText(invoice.estado)}'),
+                child: Text(
+                  'Estado: ${toDisplayText(invoice.estaSuspendido ? invoice.estado : (invoice.estadoPeriodoAnterior ?? invoice.estado))}',
+                ),
               ),
               const SizedBox(width: 16),
               Text(
-                'Total: ${_formatCurrency(invoice.total)}',
+                'Total a pagar: ${_formatCurrency(invoice.totalAPagar)}',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ],

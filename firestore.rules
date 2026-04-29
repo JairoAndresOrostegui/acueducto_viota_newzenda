@@ -71,6 +71,22 @@ service cloud.firestore {
               ]);
     }
 
+    function isSuspensionStatusUpdate() {
+      return isAdmin() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'pagado',
+                'facturado',
+                'estado',
+                'reciboId',
+                'detalleEstado',
+                'observacionesAdmin'
+              ]) &&
+          request.resource.data.estado == 'suspendido' &&
+          request.resource.data.pagado == false &&
+          request.resource.data.facturado == true;
+    }
+
     match /usuarios/{userId} {
       allow read: if signedIn() &&
           (request.auth.uid == userId ||
@@ -116,7 +132,8 @@ service cloud.firestore {
         allow create: if canManageConsumptions();
         allow update: if canManageConsumptions() &&
             (!(resource.data.facturado == true || resource.data.pagado == true) ||
-                isPaymentStatusUpdate());
+                isPaymentStatusUpdate() ||
+                isSuspensionStatusUpdate());
         allow delete: if false;
 
         match /historial/{historialId} {

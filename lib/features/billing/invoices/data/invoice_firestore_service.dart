@@ -21,6 +21,8 @@ class RegenerateInvoicesResult {
 }
 
 class InvoiceFirestoreService {
+  static const String _accountingStartPeriodId = '2026-01';
+
   InvoiceFirestoreService({
     FirebaseFirestore? firestore,
     BillingObservationFirestoreService? observationService,
@@ -44,6 +46,9 @@ class InvoiceFirestoreService {
       _db.collection('periodos').doc(period).collection('recibos');
 
   Future<List<Invoice>> fetchInvoicesForPeriod(String period) async {
+    if (!_isAccountingPeriodId(period)) {
+      return const [];
+    }
     final snapshot = await _periodInvoices(period).get();
     final items = snapshot.docs
         .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
@@ -66,6 +71,7 @@ class InvoiceFirestoreService {
         .get();
     final items = snapshot.docs
         .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
+        .where((item) => _isAccountingPeriodId(item.periodo))
         .toList()
       ..sort((a, b) {
         final periodCompare = b.periodo.compareTo(a.periodo);
@@ -105,6 +111,7 @@ class InvoiceFirestoreService {
     final snapshot = await query.get();
     final items = snapshot.docs
         .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
+        .where((item) => _isAccountingPeriodId(item.periodo))
         .toList()
       ..sort((a, b) {
         final periodCompare = a.periodo.compareTo(b.periodo);
@@ -126,6 +133,7 @@ class InvoiceFirestoreService {
     if (readings.isEmpty) {
       return;
     }
+    _ensureAccountingPeriod(period.id);
 
     final now = DateTime.now();
     final dueDate = _resolveDueDate(now);
@@ -185,10 +193,11 @@ class InvoiceFirestoreService {
     PaymentMethod? paymentMethod,
     String? observations,
   }) async {
+    _ensureAccountingPeriod(invoice.periodo);
     final updated = invoice.copyWith(
       estado: paid ? 'pagado' : 'facturado',
       pagado: paid,
-      valorPagado: paid ? (paidAmount ?? invoice.total) : 0,
+      valorPagado: paid ? (paidAmount ?? invoice.totalAPagar) : 0,
       fechaPago: paid ? DateTime.now() : null,
       medioPagoId: paid ? paymentMethod?.id : null,
       medioPagoDescripcion: paid ? paymentMethod?.descripcion : null,
@@ -210,7 +219,7 @@ class InvoiceFirestoreService {
         'pagado': paid,
         'estado': paid ? 'pagado' : 'facturado',
         'reciboId': invoice.id,
-        'valorPagado': paid ? (paidAmount ?? invoice.total) : 0,
+        'valorPagado': paid ? (paidAmount ?? invoice.totalAPagar) : 0,
         'fechaPago': paid ? Timestamp.fromDate(updated.fechaPago!) : null,
         'medioPagoId': paid ? paymentMethod?.id : null,
         'medioPagoDescripcion': paid ? paymentMethod?.descripcion : null,
@@ -224,12 +233,52 @@ class InvoiceFirestoreService {
     await batch.commit();
   }
 
+  Future<void> suspendInvoice({
+    required Invoice invoice,
+    required AppUser actor,
+    String? observations,
+  }) async {
+    _ensureAccountingPeriod(invoice.periodo);
+    if (invoice.estaPagado) {
+      throw StateError('No se puede suspender una factura pagada.');
+    }
+    if (_resolvePreviousPeriodStatus(invoice) != 'en_mora') {
+      throw StateError('Solo se puede suspender una factura en mora.');
+    }
+    if (invoice.estaSuspendido) {
+      return;
+    }
+
+    final updated = invoice.copyWith(estado: 'suspendido');
+    final batch = _db.batch();
+    batch.set(
+      _periodInvoices(invoice.periodo).doc(invoice.id),
+      updated.toFirestore(),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _periodConsumptions(invoice.periodo).doc(invoice.codigoContador),
+      {
+        'estado': 'suspendido',
+        'reciboId': invoice.id,
+        'pagado': false,
+        'facturado': true,
+        'detalleEstado': 'Suspendido por ${actor.nombre}',
+        if ((observations?.trim().isNotEmpty ?? false))
+          'observacionesAdmin': observations!.trim(),
+      },
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   Future<RegenerateInvoicesResult> regenerateInvoicesForPeriod({
     required BillingPeriod period,
     required BillingValueConfig values,
     required List<PaymentMethod> paymentMethods,
     required AppUser actor,
   }) async {
+    _ensureAccountingPeriod(period.id);
     final existingInvoices = await fetchInvoicesForPeriod(period.id);
     if (existingInvoices.isEmpty) {
       return const RegenerateInvoicesResult(
@@ -360,7 +409,7 @@ class InvoiceFirestoreService {
       fechaVencimiento: dueDate,
       cargoFijo: values.cargoFijo,
       reconexion: 0,
-      saldoAnterior: 0,
+      saldoAnterior: _resolvePreviousBalance(previousInvoice),
       lineas: lineItems,
       mediosPagoTexto: paymentText,
       mediosPago: paymentLines,
@@ -383,12 +432,18 @@ class InvoiceFirestoreService {
   Future<Map<String, Invoice>> _fetchPreviousInvoicesByMeter(
     BillingPeriod period,
   ) async {
-    final previousPeriodId = _previousPeriodId(period);
-    if (previousPeriodId == null) {
+    final previousPeriodIds = await _fetchPreviousBillablePeriodIds(period.id);
+    if (previousPeriodIds.isEmpty) {
       return const {};
     }
-    final items = await fetchInvoicesForPeriod(previousPeriodId);
-    return {for (final item in items) item.codigoContador: item};
+    final result = <String, Invoice>{};
+    for (final previousPeriodId in previousPeriodIds) {
+      final items = await fetchInvoicesForPeriod(previousPeriodId);
+      for (final item in items) {
+        result.putIfAbsent(item.codigoContador, () => item);
+      }
+    }
+    return result;
   }
 
   Future<Map<String, AppUser>> _fetchUsersByCode() async {
@@ -441,27 +496,57 @@ class InvoiceFirestoreService {
     return DateTime(generatedAt.year, generatedAt.month, 24);
   }
 
-  String? _previousPeriodId(BillingPeriod period) {
-    if (period.ano <= 0 || period.mes <= 0) {
-      return null;
-    }
-    final current = DateTime(period.ano, period.mes);
-    final previous = DateTime(current.year, current.month - 1);
-    return '${previous.year}-${previous.month.toString().padLeft(2, '0')}';
-  }
-
   String _resolvePreviousPeriodStatus(Invoice? previousInvoice) {
-    if (previousInvoice == null) {
+    if (previousInvoice == null ||
+        !_isAccountingPeriodId(previousInvoice.periodo)) {
       return 'al_dia';
     }
     final normalized = previousInvoice.estado.trim().toLowerCase();
     if (normalized == 'suspendido') {
       return 'suspendido';
     }
-    if (normalized == 'pagado' || previousInvoice.pagado) {
+    if (previousInvoice.saldoPendiente <= 0 ||
+        normalized == 'pagado' ||
+        previousInvoice.estaPagado) {
       return 'al_dia';
     }
     return 'en_mora';
+  }
+
+  int _resolvePreviousBalance(Invoice? previousInvoice) {
+    if (previousInvoice == null ||
+        !_isAccountingPeriodId(previousInvoice.periodo)) {
+      return 0;
+    }
+    return previousInvoice.saldoPendiente;
+  }
+
+  Future<List<String>> _fetchPreviousBillablePeriodIds(
+    String currentPeriodId,
+  ) async {
+    final snapshot = await _db.collection('periodos').get();
+    final ids = snapshot.docs
+        .map((doc) => doc.id)
+        .where(
+          (periodId) =>
+              _isAccountingPeriodId(periodId) &&
+              periodId.compareTo(currentPeriodId) < 0,
+        )
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    return ids;
+  }
+
+  bool _isAccountingPeriodId(String periodId) {
+    return periodId.trim().compareTo(_accountingStartPeriodId) >= 0;
+  }
+
+  void _ensureAccountingPeriod(String periodId) {
+    if (!_isAccountingPeriodId(periodId)) {
+      throw StateError(
+        'El periodo $periodId no es contable. La facturacion inicia en 2026-01.',
+      );
+    }
   }
 
   String? _buildBillingChangeNotice({

@@ -2,55 +2,88 @@
 
 ## Perfil
 
-El administrador entra al panel con tres grupos:
+El administrador entra al panel principal con tres grupos:
 
 1. `Usuarios`
 2. `Consumos`
 3. `Facturacion`
 
-## Flujo recomendado de operacion
+## Flujo recomendado
 
-1. revisar catalogos y usuarios
-2. crear o activar el periodo de trabajo
-3. confirmar valores de facturacion, medios de pago y observaciones
-4. esperar a que el operador descargue el periodo y suba lecturas
-5. resolver conflictos si aparecen
-6. revisar reportes
-7. facturar consumos pendientes
-8. regenerar recibos no pagados si hubo cambios
-9. registrar pagos
-10. exportar PDF o CSV si hace falta
+1. Revisar catalogos y usuarios.
+2. Importar usuarios si aplica.
+3. Crear o activar el periodo de trabajo.
+4. Confirmar valores de facturacion, medios de pago y observaciones.
+5. Descargar o importar consumos.
+6. Resolver conflictos si aparecen.
+7. Revisar reportes.
+8. Generar recibos.
+9. Regenerar recibos no pagados si hubo cambios.
+10. Registrar pagos.
+11. Suspender facturas en mora cuando aplique.
+12. Exportar PDF o CSV si hace falta.
 
 ## Usuarios
+
+Pantallas:
+
+- `Usuarios`
+- `Importar usuarios`
+- `Tipos documento`
+- `Roles`
+- `Sectores`
+- `Logs`
 
 Puede:
 
 - crear, editar y eliminar usuarios
-- administrar tipos de documento, roles y sectores
-- consultar logs
+- importar clientes desde Excel
+- administrar catalogos activos
+- consultar auditoria de cambios
 
 ## Consumos
+
+Pantallas:
+
+- `Conflictos`
+- `Registrar consumos`
+- `Importar consumos`
+- `Reportes`
+- `Registrar pagos`
+- `Suspensiones`
 
 Puede:
 
 - revisar y resolver conflictos
+- registrar lecturas desde la app
+- importar lecturas desde Excel
 - consultar reportes
 - exportar CSV
 - registrar y revertir pagos
+- suspender facturas en mora
 
 Notas:
 
-- al registrar pago puede capturar el valor realmente pagado
-- ese valor queda guardado en recibos y consumos
+- Al registrar pago puede capturar el valor realmente pagado.
+- El valor queda guardado en recibos y consumos.
+- Las suspensiones solo se habilitan para facturas no pagadas con mora anterior.
 
 ## Facturacion
+
+Pantallas:
+
+- `Facturacion`
+- `Periodos`
+- `Medios de pago`
+- `Observaciones`
+- `Valores`
 
 Puede:
 
 - crear periodos y marcar uno como vigente
-- definir valores de facturacion
+- definir valores de facturacion versionados
 - administrar medios de pago
-- administrar observaciones de facturacion
+- administrar observaciones masivas e individuales
 - generar recibos masivos o individuales
 - regenerar recibos no pagados
 - exportar PDF por periodo o por sector
@@ -58,11 +91,15 @@ Puede:
 
 ## Reglas clave
 
-- no se deben facturar lecturas bloqueadas
-- un recibo pagado no se regenera
-- si cambian los valores de facturacion, el recibo regenerado deja aviso
-- el vencimiento se calcula con la fecha de generacion del recibo
+- No se deben facturar lecturas bloqueadas.
+- Un recibo pagado no se regenera.
+- Si cambian los valores de facturacion, el recibo regenerado deja aviso.
+- El vencimiento se calcula con la fecha de generacion del recibo.
+- La facturacion contable inicia en `2026-01`.
+- `2025-12` no entra en cartera; se usa como base historica.
+- El contador solo consulta reportes y cartera.
+- El cliente solo ve su recibo pendiente mas reciente.
 
 ## Estado
 
-El perfil `administrador` ya tiene cubierto el flujo operativo principal del sistema.
+El perfil `administrador` tiene cubierto el flujo operativo principal del sistema.

@@ -141,6 +141,14 @@ class _ClientInvoiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final status = invoice.estadoPeriodoAnterior?.trim().toLowerCase() ?? '';
+    final title = (status == 'suspendido' || invoice.estaSuspendido)
+        ? 'Servicio suspendido'
+        : switch (status) {
+      'en_mora' => 'Recibo en mora',
+      _ => 'Recibo pendiente de pago',
+    };
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -152,7 +160,7 @@ class _ClientInvoiceCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Recibo pendiente de pago',
+            title,
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 10),
@@ -182,6 +190,11 @@ class _ClientInvoiceCard extends StatelessWidget {
               _LabelValue(label: 'Lectura anterior', value: '${invoice.lecturaAnterior ?? 0}'),
               _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
               _LabelValue(label: 'Consumo m³', value: '${invoice.consumoM3}'),
+              if (invoice.saldoAnterior > 0)
+                _LabelValue(
+                  label: 'Saldo anterior',
+                  value: _formatCurrency(invoice.saldoAnterior),
+                ),
             ],
           ),
           const SizedBox(height: 18),
@@ -216,7 +229,7 @@ class _ClientInvoiceCard extends StatelessWidget {
               Expanded(child: Text(invoice.mensaje ?? '')),
               const SizedBox(width: 16),
               Text(
-                'Total: ${_formatCurrency(invoice.total)}',
+                'Total a pagar: ${_formatCurrency(invoice.totalAPagar)}',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ],

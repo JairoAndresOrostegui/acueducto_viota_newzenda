@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InvoiceLineItem {
@@ -146,6 +148,15 @@ class Invoice {
   final String? estadoPeriodoAnterior;
   final String? avisoFacturacion;
   final String? mensaje;
+
+  int get totalAPagar => total + saldoAnterior + reconexion;
+
+  int get saldoPendiente =>
+      math.max(totalAPagar - (valorPagado ?? 0), 0);
+
+  bool get estaPagado => pagado || estado.trim().toLowerCase() == 'pagado';
+
+  bool get estaSuspendido => estado.trim().toLowerCase() == 'suspendido';
 
   Map<String, dynamic> toFirestore() {
     return {
