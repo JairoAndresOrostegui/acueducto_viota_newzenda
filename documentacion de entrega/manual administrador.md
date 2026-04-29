@@ -18,7 +18,7 @@ El administrador entra al panel principal con tres grupos:
 6. Resolver conflictos si aparecen.
 7. Revisar reportes.
 8. Generar recibos.
-9. Regenerar recibos no pagados si hubo cambios.
+9. Regenerar recibos no pagados si hubo cambios, de forma masiva o individual.
 10. Registrar pagos.
 11. Suspender facturas en mora cuando aplique.
 12. Exportar PDF o CSV si hace falta.
@@ -61,6 +61,7 @@ Puede:
 - exportar CSV
 - registrar y revertir pagos
 - suspender facturas en mora
+- filtrar suspensiones por `Todos`, `Al día`, `En mora` y `Suspendidas`
 
 Notas:
 
@@ -85,7 +86,7 @@ Puede:
 - administrar medios de pago
 - administrar observaciones masivas e individuales
 - generar recibos masivos o individuales
-- regenerar recibos no pagados
+- regenerar recibos no pagados de forma masiva o individual
 - exportar PDF por periodo o por sector
 - abrir recibos individuales en PDF
 
@@ -93,6 +94,7 @@ Puede:
 
 - No se deben facturar lecturas bloqueadas.
 - Un recibo pagado no se regenera.
+- La regeneracion individual permite corregir casos puntuales sin recalcular todo el periodo.
 - Si cambian los valores de facturacion, el recibo regenerado deja aviso.
 - El vencimiento se calcula con la fecha de generacion del recibo.
 - La facturacion contable inicia en `2026-01`.

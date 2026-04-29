@@ -10,6 +10,7 @@ El operador entra directamente a `Registrar consumos`.
 - Consultar clientes y contadores descargados.
 - Registrar lecturas localmente.
 - Reportar irregularidades.
+- Ver solo clientes con irregularidades del periodo.
 - Subir lecturas al sistema.
 
 ## Flujo de trabajo
@@ -20,8 +21,10 @@ El operador entra directamente a `Registrar consumos`.
 4. Registrar lectura actual.
 5. Si hay novedad, marcar irregularidad y describirla.
 6. Repetir hasta completar el recorrido.
-7. Presionar `Subir lecturas`.
-8. Revisar el resumen final.
+7. Usar `Lecturas pendientes` para revisar clientes sin lectura.
+8. Usar `Irregularidades` para revisar novedades reportadas.
+9. Presionar `Subir lecturas`.
+10. Revisar el resumen final.
 
 ## Reglas importantes
 
@@ -29,6 +32,7 @@ El operador entra directamente a `Registrar consumos`.
 - El periodo de trabajo descargado se mantiene localmente hasta descargar otro.
 - Si una lectura entra en conflicto, queda bloqueada para revision del administrador.
 - No puede modificar lecturas ya facturadas, pagadas o suspendidas.
+- `Pendientes por subir` solo cuenta lecturas capturadas localmente y aun no sincronizadas.
 
 ## Casos tipicos de conflicto
 

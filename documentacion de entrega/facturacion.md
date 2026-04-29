@@ -59,7 +59,8 @@ Acciones:
 
 - `Generar recibos`
 - `Generar individual`
-- `Regenerar`
+- `Regenerar` periodo
+- `Regenerar` individual
 - `PDF periodo`
 - `PDF por sector`
 - `No preparados`
@@ -92,6 +93,22 @@ Reglas para facturar:
 4. Recalcular recibos no pagados con valores vigentes.
 5. Guardar aviso si cambiaron valores de facturacion.
 
+## Flujo Regenerar recibo individual
+
+1. Seleccionar periodo.
+2. Ubicar el recibo generado.
+3. Presionar `Regenerar` en la tarjeta del recibo.
+4. Confirmar la accion.
+5. Recalcular solo ese recibo con valores vigentes, observaciones, medios de pago y recibo anterior.
+6. Recargar la informacion del periodo.
+
+Reglas:
+
+- El boton queda deshabilitado si el recibo esta pagado.
+- Si se intenta regenerar un recibo pagado, el servicio lo rechaza.
+- Si no existe lectura asociada al contador del recibo, la regeneracion individual se detiene.
+- Sirve para casos puntuales como conflictos corregidos o pagos registrados en meses anteriores sin regenerar todo el periodo.
+
 ## Exportacion PDF
 
 Opciones:
@@ -118,6 +135,7 @@ Segun `InvoiceFirestoreService`:
 - `observaciones`: snapshot al facturar
 - `sector`: snapshot del usuario al facturar
 - `estadoPeriodoAnterior`: `al_dia`, `en_mora` o `suspendido`
+- Presentacion visible: `al_dia` se muestra como `Al día` y `en_mora` como `En mora`.
 
 ## PDF del recibo
 

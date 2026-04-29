@@ -61,6 +61,7 @@ Archivo principal:
 Objetivo:
 
 - Permitir al operador descargar un periodo, trabajar localmente y sincronizar lecturas.
+- Revisar de forma rapida lecturas sin registrar e irregularidades del periodo de trabajo.
 
 Reglas:
 
@@ -68,11 +69,20 @@ Reglas:
 - Primero descarga el periodo vigente al dispositivo.
 - No puede descargar otro periodo si hay lecturas locales pendientes.
 - No puede registrar lectura sobre consumos facturados, pagados o bloqueados.
+- `Pendientes por subir` solo cuenta lecturas locales en estado `pendiente_local` o `pendiente_revision`.
+- Los estados oficiales `sincronizado`, `irregularidad_reportada`, `facturado`, `pagado`, `suspendido`, `resuelto` y `editado_admin` no se tratan como pendientes por subir.
+- Al subir, si ya existe un consumo oficial para el periodo y contador, la lectura queda como conflicto/bloqueada en lugar de intentar sobrescribir el consumo.
 
 Resultado local:
 
 - sin irregularidad: `estado = pendiente_local`
 - con irregularidad: `estado = pendiente_revision`
+
+Vistas rapidas:
+
+- `Lecturas pendientes`: lista clientes del periodo sin lectura registrada.
+- `Irregularidades`: lista clientes con lectura irregular registrada en el periodo.
+- Cada vista respeta la busqueda por nombre, codigo de usuario o contador.
 
 ## Pantalla Importar consumos
 
@@ -201,12 +211,14 @@ Reglas:
 - Solo se habilita el boton `Suspender` si `estadoPeriodoAnterior = en_mora`.
 - No se suspende una factura pagada.
 - Una factura ya suspendida no se vuelve a procesar.
+- El boton de suspension mantiene ancho controlado para evitar errores de layout en web.
 
 Filtros:
 
 - nombre
 - codigo de usuario
 - codigo de contador
+- estado: `Todos`, `Al día`, `En mora`, `Suspendidas`
 
 Efecto tecnico:
 

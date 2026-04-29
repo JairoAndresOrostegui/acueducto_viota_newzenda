@@ -29,6 +29,7 @@ El sistema cubre el flujo principal de operacion:
 - reportes de lecturas y cartera pendiente
 - facturacion masiva e individual
 - regeneracion de recibos no pagados
+- regeneracion individual de recibos no pagados
 - PDF por recibo, por periodo y por sector
 - gestion de medios de pago y observaciones de facturacion
 - registro y reversa de pagos
@@ -107,6 +108,8 @@ Archivo principal: `lib/features/consumptions/presentation/pages/consumption_reg
 - Permite registrar lecturas localmente.
 - Soporta irregularidades y observaciones.
 - Sincroniza lecturas hacia Firestore.
+- Muestra vistas rapidas de lecturas sin registrar e irregularidades.
+- El contador `Pendientes por subir` solo incluye lecturas locales `pendiente_local` o `pendiente_revision`.
 
 ### Importar consumos
 
@@ -140,6 +143,7 @@ Archivo principal: `lib/features/consumptions/presentation/pages/consumption_sus
 
 - Lista facturas por periodo desde `2026-01`.
 - Busca por nombre, codigo de usuario o codigo de contador.
+- Filtra por `Todos`, `Al día`, `En mora` y `Suspendidas`.
 - Solo permite suspender facturas con estado de periodo anterior `en_mora`.
 - No permite suspender facturas ya pagadas.
 
@@ -148,7 +152,7 @@ Archivo principal: `lib/features/consumptions/presentation/pages/consumption_sus
 Archivo principal: `lib/features/billing/invoices/presentation/pages/billing_invoices_page.dart`
 
 - Genera recibos masivos o individuales.
-- Regenera recibos no pagados.
+- Regenera recibos no pagados de forma masiva o individual.
 - Exporta PDF por periodo o por sector.
 - Lista lecturas no preparadas para facturar.
 
@@ -197,7 +201,8 @@ Archivo principal: `lib/features/billing/invoices/presentation/pages/client_invo
 - La facturacion contable inicia en `2026-01`; `2025-12` se usa como base historica y no entra en cartera.
 - Los recibos se generan solo para lecturas facturables y no bloqueadas.
 - La fecha de vencimiento es el dia `24` del mes de generacion; si se genera despues del dia `20`, vence 15 dias despues.
-- La regeneracion no modifica recibos pagados.
+- La regeneracion masiva e individual no modifica recibos pagados.
+- Los estados internos como `al_dia` se muestran al usuario como `Al día`.
 - El cliente solo ve recibos asociados a su `codigoUsuario`.
 - El contador tiene acceso de solo lectura a reportes y cartera.
 - Las suspensiones solo aplican a facturas en mora y no pagadas.
