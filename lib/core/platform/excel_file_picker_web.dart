@@ -40,11 +40,17 @@ Future<Uint8List?> pickExcelFileBytes() {
         return;
       }
       final result = reader.result;
-      if (result is ByteBuffer) {
-        completer.complete(result.asUint8List());
-      } else {
+      final bytes = switch (result) {
+        ByteBuffer buffer => buffer.asUint8List(),
+        Uint8List list => list,
+        List<int> list => Uint8List.fromList(list),
+        _ => null,
+      };
+      if (bytes == null) {
         completer.completeError(StateError('El archivo no entrego bytes validos.'));
+        return;
       }
+      completer.complete(bytes);
     });
     reader.readAsArrayBuffer(file);
   });

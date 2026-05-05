@@ -34,6 +34,7 @@ async function getAdminProfile(uid) {
   return {
     uid,
     nombre: data.nombre ?? 'Administrador',
+    superAdmin: data.superAdmin === true,
   };
 }
 
@@ -122,7 +123,7 @@ function normalizeStringList(value, field) {
       throw new HttpsError(
         'invalid-argument',
         `El campo ${field} solo puede contener letras y numeros.`,
-      );
+        );
     }
   }
 
@@ -152,7 +153,7 @@ function mapAdminError(error) {
   switch (error?.code) {
     case 'auth/email-already-exists':
       return new HttpsError(
-        'already-exists',
+          'already-exists',
         'Ya existe un usuario con ese correo en Firebase Authentication.',
       );
     case 'auth/invalid-email':
@@ -215,18 +216,20 @@ async function ensureUniqueDocumentNumber(uid, numeroDocumento) {
 }
 
 async function ensureUniqueClientIdentifiers(uid, codigoUsuario, numeroContador) {
-  const codeSnapshot = await db
-    .collection(USER_COLLECTION)
-    .where('codigoUsuario', '==', codigoUsuario)
-    .limit(5)
-    .get();
+  if (codigoUsuario && codigoUsuario !== 'na') {
+    const codeSnapshot = await db
+      .collection(USER_COLLECTION)
+      .where('codigoUsuario', '==', codigoUsuario)
+      .limit(5)
+      .get();
 
-  for (const doc of codeSnapshot.docs) {
-    if (doc.id !== uid) {
-      throw new HttpsError(
+    for (const doc of codeSnapshot.docs) {
+      if (doc.id !== uid) {
+        throw new HttpsError(
         'already-exists',
         `El código de usuario ${codigoUsuario} ya está asignado a otro cliente.`,
-      );
+        );
+      }
     }
   }
 
@@ -304,17 +307,15 @@ async function getOrCreateAuthUserForProfile(profileDoc, profileData, email) {
 
   if (email) {
     try {
-      const userByEmail = await admin.auth().getUserByEmail(email);
-      await profileDoc.ref.set(
-        {
-          uid: userByEmail.uid,
-          correo: email,
-          fechaActualizacion: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true },
+      await admin.auth().getUserByEmail(email);
+      throw new HttpsError(
+        'already-exists',
+        'Este correo ya esta registrado. Usa otro correo o contacta al administrador.',
       );
-      return userByEmail.uid;
     } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
       if (error?.code !== 'auth/user-not-found') {
         throw error;
       }
@@ -331,6 +332,22 @@ async function getOrCreateAuthUserForProfile(profileDoc, profileData, email) {
   }
   const created = await admin.auth().createUser(createPayload);
   return created.uid;
+}
+
+async function upsertAuthUser(uid, authPayload) {
+  try {
+    await admin.auth().updateUser(uid, authPayload);
+    return;
+  } catch (error) {
+    if (error?.code !== 'auth/user-not-found') {
+      throw error;
+    }
+  }
+
+  await admin.auth().createUser({
+    uid,
+    ...authPayload,
+  });
 }
 
 async function findClientByCode(codigoUsuario) {
@@ -406,6 +423,7 @@ function sanitizeUserPayload(data) {
     sector: data.sector,
     correo: data.correo,
     estado: data.estado,
+    superAdmin: data.superAdmin === true,
   };
 }
 
@@ -456,7 +474,47 @@ async function writeUserLog({
   });
 }
 
-async function buildUserPayload(uid, data, previous = null) {
+function normalizeLowercaseOrStorageValue(value, field, allowEmptyFields) {
+  if (!allowEmptyFields) {
+    return normalizeLowercase(value, field);
+  }
+  const stored = toStorageValue(value);
+  return stored === 'na' ? stored : stored.toLowerCase();
+}
+
+function normalizeStringOrStorageValue(value, field, allowEmptyFields) {
+  return allowEmptyFields ? toStorageValue(value) : normalizeString(value, field);
+}
+
+function normalizeOptionalClientCode(value, field, allowEmptyFields) {
+  if (!allowEmptyFields) {
+    return normalizeUppercaseCode(value, field);
+  }
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized || normalized.toLowerCase() === 'na' || normalized.toLowerCase() === 'null') {
+    return 'na';
+  }
+  return normalizeUppercaseCode(normalized, field);
+}
+
+function normalizeOptionalCounterList(value, field, allowEmptyFields) {
+  if (!allowEmptyFields) {
+    return normalizeSingleCounter(value, field);
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return [];
+  }
+  const normalized = value
+    .map((item) => (typeof item === 'string' ? item.trim().toUpperCase() : ''))
+    .filter((item) => item && item.toLowerCase() !== 'na' && item.toLowerCase() !== 'null');
+  if (normalized.length === 0) {
+    return [];
+  }
+  return normalizeSingleCounter(normalized, field);
+}
+
+async function buildUserPayload(uid, data, previous = null, options = {}) {
+  const allowEmptyFields = options.allowEmptyFields === true;
   const documentType = await getActiveCatalogValue(
     DOCUMENT_TYPE_COLLECTION,
     normalizeLowercase(data.tipoDocumento, 'tipoDocumento'),
@@ -470,17 +528,26 @@ async function buildUserPayload(uid, data, previous = null) {
 
   const payload = {
     uid,
-    nombre: normalizeLowercase(data.nombre, 'nombre'),
+    nombre: normalizeLowercaseOrStorageValue(data.nombre, 'nombre', allowEmptyFields),
     tipoDocumento: documentType.valor,
-    numeroDocumento: normalizeString(data.numeroDocumento, 'numeroDocumento'),
-    numeroContacto: normalizeString(data.numeroContacto, 'numeroContacto'),
+    numeroDocumento: normalizeStringOrStorageValue(
+      data.numeroDocumento,
+      'numeroDocumento',
+      allowEmptyFields,
+    ),
+    numeroContacto: normalizeStringOrStorageValue(
+      data.numeroContacto,
+      'numeroContacto',
+      allowEmptyFields,
+    ),
     codigoUsuario: 'na',
     numeroContador: [],
     rol: role.valor,
     tipoCliente: 'na',
     sector: 'na',
-    correo: normalizeLowercase(data.correo, 'correo'),
+    correo: normalizeLowercaseOrStorageValue(data.correo, 'correo', allowEmptyFields),
     estado: normalizeLowercase(data.estado, 'estado'),
+    superAdmin: previous?.superAdmin === true,
     fechaCreacion:
       previous?.fechaCreacion ?? admin.firestore.FieldValue.serverTimestamp(),
     fechaActualizacion: previous
@@ -504,14 +571,27 @@ async function buildUserPayload(uid, data, previous = null) {
       );
     }
 
-    const sector = await getActiveCatalogValue(
-      SECTOR_COLLECTION,
-      normalizeLowercase(data.sector, 'sector'),
-      'sector',
+    const normalizedSector = normalizeOptionalLowercase(data.sector);
+    if (allowEmptyFields && (!normalizedSector || normalizedSector === 'na' || normalizedSector === 'null')) {
+      payload.sector = 'na';
+    } else {
+      const sector = await getActiveCatalogValue(
+        SECTOR_COLLECTION,
+        normalizeLowercase(data.sector, 'sector'),
+        'sector',
+      );
+      payload.sector = sector.valor;
+    }
+    payload.codigoUsuario = normalizeOptionalClientCode(
+      data.codigoUsuario,
+      'codigoUsuario',
+      allowEmptyFields,
     );
-    payload.codigoUsuario = normalizeUppercaseCode(data.codigoUsuario, 'codigoUsuario');
-    payload.numeroContador = normalizeSingleCounter(data.numeroContador, 'numeroContador');
-    payload.sector = sector.valor;
+    payload.numeroContador = normalizeOptionalCounterList(
+      data.numeroContador,
+      'numeroContador',
+      allowEmptyFields,
+    );
     await ensureUniqueClientIdentifiers(uid, payload.codigoUsuario, payload.numeroContador);
   }
 
@@ -526,14 +606,15 @@ exports.createManagedUser = onCall({ cors: true, invoker: 'public' }, async (req
   try {
     const actor = await getAdminProfile(request.auth.uid);
     const data = request.data ?? {};
-    const email = normalizeLowercase(data.correo, 'correo');
     let password =
       typeof data.password === 'string' && data.password.trim() !== ''
         ? data.password.trim()
         : null;
 
-    const payload = await buildUserPayload('', data);
-    if (payload.rol !== 'cliente' && !password) {
+    const payload = await buildUserPayload('', data, null, {
+      allowEmptyFields: actor.superAdmin,
+    });
+    if (payload.rol !== 'cliente' && !password && !actor.superAdmin) {
       throw new HttpsError(
         'invalid-argument',
         'La clave temporal es obligatoria para usuarios internos.',
@@ -544,16 +625,20 @@ exports.createManagedUser = onCall({ cors: true, invoker: 'public' }, async (req
     }
 
     const authPayload = {
-      email,
       displayName: payload.nombre,
       disabled: payload.estado !== ACTIVE_STATUS,
     };
+    if (payload.correo !== 'na') {
+      authPayload.email = payload.correo;
+    }
     if (password) {
       authPayload.password = password;
     }
     const authUser = await admin.auth().createUser(authPayload);
 
-    const userPayload = await buildUserPayload(authUser.uid, data);
+    const userPayload = await buildUserPayload(authUser.uid, data, null, {
+      allowEmptyFields: actor.superAdmin,
+    });
     await db.collection(USER_COLLECTION).doc(authUser.uid).set(userPayload);
 
     await writeUserLog({
@@ -566,7 +651,7 @@ exports.createManagedUser = onCall({ cors: true, invoker: 'public' }, async (req
 
     return {
       uid: authUser.uid,
-      email: authUser.email,
+      email: authUser.email ?? '',
     };
   } catch (error) {
     if (error instanceof HttpsError) {
@@ -593,19 +678,23 @@ exports.updateManagedUser = onCall({ cors: true, invoker: 'public' }, async (req
     }
 
     const previous = existing.data();
-    const payload = await buildUserPayload(uid, data, previous);
+    const payload = await buildUserPayload(uid, data, previous, {
+      allowEmptyFields: actor.superAdmin,
+    });
 
     const authUpdate = {
-      email: payload.correo,
       displayName: payload.nombre,
       disabled: payload.estado !== ACTIVE_STATUS,
     };
+    if (payload.correo !== 'na') {
+      authUpdate.email = payload.correo;
+    }
 
     if (typeof data.password === 'string' && data.password.trim() !== '') {
       authUpdate.password = data.password.trim();
     }
 
-    await admin.auth().updateUser(uid, authUpdate);
+    await upsertAuthUser(uid, authUpdate);
     await userRef.set(payload, { merge: true });
     await writeUserLog({
       action: 'edicion',
@@ -646,6 +735,13 @@ exports.deleteManagedUser = onCall({ cors: true, invoker: 'public' }, async (req
   }
 
   const previous = existing.data();
+  if (previous.rol === 'administrador') {
+    throw new HttpsError(
+      'failed-precondition',
+      'No se pueden eliminar usuarios con rol administrador.',
+    );
+  }
+
   await writeUserLog({
     action: 'eliminacion',
     actor,
@@ -847,6 +943,7 @@ exports.importMigratedUsers = onCall(
         sector: row.sector,
         correo: row.correo,
         estado: ACTIVE_STATUS,
+        superAdmin: existing.data()?.superAdmin === true,
         fechaCreacion:
           existing.data()?.fechaCreacion ?? admin.firestore.FieldValue.serverTimestamp(),
         fechaActualizacion: existing.exists

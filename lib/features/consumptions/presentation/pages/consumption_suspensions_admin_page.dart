@@ -118,7 +118,7 @@ class _ConsumptionSuspensionsAdminPageState
       builder: (context) => AlertDialog(
         title: const Text('Suspender factura'),
         content: Text(
-          'Solo puedes suspender facturas en mora. Se suspenderá a ${toDisplayUserName(invoice.nombreUsuario)}.',
+          'Se suspenderá a ${toDisplayUserName(invoice.nombreUsuario)}.',
         ),
         actions: [
           TextButton(
@@ -158,6 +158,63 @@ class _ConsumptionSuspensionsAdminPageState
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No fue posible suspender la factura: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _restoreInvoice(Invoice invoice) async {
+    if (_saving) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Quitar suspensión'),
+        content: Text(
+          'La factura de ${toDisplayUserName(invoice.nombreUsuario)} volverá a estado normal.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Quitar suspensión'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await _invoiceService.restoreSuspendedInvoice(
+        invoice: invoice,
+        actor: widget.currentUser,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Suspensión retirada.')),
+      );
+      final period = _selectedPeriod;
+      if (period != null) {
+        await _loadInvoices(period);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No fue posible quitar la suspensión: $error')),
       );
     } finally {
       if (mounted) {
@@ -243,10 +300,11 @@ class _ConsumptionSuspensionsAdminPageState
                               final invoice = filteredInvoices[index];
                               return _SuspensionCard(
                                 invoice: invoice,
-                                onSuspend: invoice.estadoPeriodoAnterior == 'en_mora' &&
-                                        !invoice.estaSuspendido &&
-                                        !invoice.estaPagado
+                                onSuspend: !invoice.estaSuspendido
                                     ? () => _suspendInvoice(invoice)
+                                    : null,
+                                onRestore: invoice.estaSuspendido
+                                    ? () => _restoreInvoice(invoice)
                                     : null,
                               );
                             },
@@ -390,7 +448,7 @@ class _Header extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Suspende solo facturas en mora. El periodo base 2025-12 no interviene en la cartera.',
+              'Suspende facturas no pagadas. El periodo base 2025-12 no interviene en la cartera.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             const SizedBox(height: 12),
@@ -475,10 +533,12 @@ class _SuspensionCard extends StatelessWidget {
   const _SuspensionCard({
     required this.invoice,
     required this.onSuspend,
+    required this.onRestore,
   });
 
   final Invoice invoice;
   final VoidCallback? onSuspend;
+  final VoidCallback? onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -535,12 +595,18 @@ class _SuspensionCard extends StatelessWidget {
             ],
           );
           final action = OutlinedButton.icon(
-            onPressed: onSuspend,
+            onPressed: invoice.estaSuspendido ? onRestore : onSuspend,
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(0, 44),
             ),
-            icon: const Icon(Icons.pause_circle_outline_rounded),
-            label: const Text('Suspender'),
+            icon: Icon(
+              invoice.estaSuspendido
+                  ? Icons.play_circle_outline_rounded
+                  : Icons.pause_circle_outline_rounded,
+            ),
+            label: Text(
+              invoice.estaSuspendido ? 'Quitar suspensión' : 'Suspender',
+            ),
           );
 
           if (compact) {

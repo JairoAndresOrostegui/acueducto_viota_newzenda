@@ -250,7 +250,7 @@ class _ConsumptionReportsAdminPageState
                           OutlinedButton.icon(
                             onPressed: _items.isEmpty ? null : _export,
                             icon: const Icon(Icons.download_rounded),
-                            label: const Text('Exportar CSV'),
+                            label: const Text('Exportar Excel'),
                           ),
                         ],
                       ),
@@ -331,7 +331,7 @@ class _ConsumptionReportsAdminPageState
                         OutlinedButton.icon(
                           onPressed: _items.isEmpty ? null : _export,
                           icon: const Icon(Icons.download_rounded),
-                          label: const Text('Exportar CSV'),
+                          label: const Text('Exportar Excel'),
                         ),
                       ],
                     ),

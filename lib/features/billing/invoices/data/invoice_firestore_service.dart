@@ -239,12 +239,6 @@ class InvoiceFirestoreService {
     String? observations,
   }) async {
     _ensureAccountingPeriod(invoice.periodo);
-    if (invoice.estaPagado) {
-      throw StateError('No se puede suspender una factura pagada.');
-    }
-    if (_resolvePreviousPeriodStatus(invoice) != 'en_mora') {
-      throw StateError('Solo se puede suspender una factura en mora.');
-    }
     if (invoice.estaSuspendido) {
       return;
     }
@@ -261,11 +255,42 @@ class InvoiceFirestoreService {
       {
         'estado': 'suspendido',
         'reciboId': invoice.id,
-        'pagado': false,
+        'pagado': invoice.pagado,
         'facturado': true,
         'detalleEstado': 'Suspendido por ${actor.nombre}',
         if ((observations?.trim().isNotEmpty ?? false))
           'observacionesAdmin': observations!.trim(),
+      },
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
+  Future<void> restoreSuspendedInvoice({
+    required Invoice invoice,
+    required AppUser actor,
+  }) async {
+    _ensureAccountingPeriod(invoice.periodo);
+    if (!invoice.estaSuspendido) {
+      return;
+    }
+
+    final restoredStatus = invoice.pagado ? 'pagado' : 'facturado';
+    final updated = invoice.copyWith(estado: restoredStatus);
+    final batch = _db.batch();
+    batch.set(
+      _periodInvoices(invoice.periodo).doc(invoice.id),
+      updated.toFirestore(),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _periodConsumptions(invoice.periodo).doc(invoice.codigoContador),
+      {
+        'estado': restoredStatus,
+        'reciboId': invoice.id,
+        'pagado': invoice.pagado,
+        'facturado': true,
+        'detalleEstado': 'Suspension levantada por ${actor.nombre}',
       },
       SetOptions(merge: true),
     );

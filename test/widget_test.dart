@@ -16,7 +16,9 @@ import 'package:frontacueductonewzenda/features/users/domain/app_user.dart';
 import 'package:frontacueductonewzenda/features/users/domain/user_audit_log.dart';
 
 void main() {
-  testWidgets('shows validation errors before submitting login', (tester) async {
+  testWidgets('shows validation errors before submitting login', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1440, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -154,6 +156,7 @@ class FakeUserFirestoreService extends UserFirestoreService {
       sector: 'NA',
       correo: 'admin@acueducto.com',
       estado: 'activo',
+      superAdmin: false,
       fechaCreacion: DateTime(2026, 4, 18),
     );
   }
@@ -254,10 +257,7 @@ class FakeSectorCatalogService extends SectorCatalogService {
 
 class FakeUserAuditLogService extends UserAuditLogService {
   @override
-  Stream<List<UserAuditLog>> watchLogs({
-    String? query,
-    int limit = 50,
-  }) async* {
+  Stream<List<UserAuditLog>> watchLogs({String? query, int limit = 50}) async* {
     yield const [];
   }
 }

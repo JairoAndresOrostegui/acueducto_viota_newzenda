@@ -31,7 +31,7 @@ service cloud.firestore {
     function isContador() {
       return signedIn() &&
           exists(currentUserPath()) &&
-          currentUserData().rol == 'contador' &&
+          currentUserData().rol in ['contador', 'fiscal'] &&
           currentUserData().estado == 'activo';
     }
 
@@ -71,7 +71,7 @@ service cloud.firestore {
               ]);
     }
 
-    function isSuspensionStatusUpdate() {
+    function isAdministrativeInvoiceStatusUpdate() {
       return isAdmin() &&
           request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly([
@@ -82,8 +82,7 @@ service cloud.firestore {
                 'detalleEstado',
                 'observacionesAdmin'
               ]) &&
-          request.resource.data.estado == 'suspendido' &&
-          request.resource.data.pagado == false &&
+          request.resource.data.estado in ['facturado', 'pagado', 'suspendido'] &&
           request.resource.data.facturado == true;
     }
 
@@ -133,7 +132,7 @@ service cloud.firestore {
         allow update: if canManageConsumptions() &&
             (!(resource.data.facturado == true || resource.data.pagado == true) ||
                 isPaymentStatusUpdate() ||
-                isSuspensionStatusUpdate());
+                isAdministrativeInvoiceStatusUpdate());
         allow delete: if false;
 
         match /historial/{historialId} {

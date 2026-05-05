@@ -14,6 +14,7 @@ class AppUser {
     required this.sector,
     required this.correo,
     required this.estado,
+    required this.superAdmin,
     required this.fechaCreacion,
     this.fechaActualizacion,
   });
@@ -30,6 +31,7 @@ class AppUser {
   final String sector;
   final String correo;
   final String estado;
+  final bool superAdmin;
   final DateTime fechaCreacion;
   final DateTime? fechaActualizacion;
 
@@ -57,6 +59,7 @@ class AppUser {
     String? sector,
     String? correo,
     String? estado,
+    bool? superAdmin,
     DateTime? fechaCreacion,
     DateTime? fechaActualizacion,
   }) {
@@ -73,6 +76,7 @@ class AppUser {
       sector: sector ?? this.sector,
       correo: correo ?? this.correo,
       estado: estado ?? this.estado,
+      superAdmin: superAdmin ?? this.superAdmin,
       fechaCreacion: fechaCreacion ?? this.fechaCreacion,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
     );
@@ -96,6 +100,7 @@ class AppUser {
       sector: data['sector'] as String? ?? '',
       correo: data['correo'] as String? ?? '',
       estado: data['estado'] as String? ?? '',
+      superAdmin: data['superAdmin'] == true,
       fechaCreacion: _toDateTime(data['fechaCreacion']) ?? DateTime.now(),
       fechaActualizacion: _toDateTime(data['fechaActualizacion']),
     );
@@ -125,6 +130,7 @@ class AppUser {
       'sector': sector,
       'correo': correo,
       'estado': estado,
+      'superAdmin': superAdmin,
     };
   }
 

@@ -108,6 +108,7 @@ class HomePage extends StatelessWidget {
       case 'cliente':
         return ClientInvoicePage(currentUser: currentUser);
       case 'contador':
+      case 'fiscal':
         return const _SingleModuleShell(
           title: 'Consumos',
           message: 'Modulo disponible: Reportes',

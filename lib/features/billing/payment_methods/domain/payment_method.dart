@@ -8,12 +8,6 @@ class PaymentMethod {
     this.fechaActualizacion,
   });
 
-  static final PaymentMethod cash = PaymentMethod(
-    id: 'efectivo',
-    descripcion: 'Efectivo',
-    fechaCreacion: DateTime.fromMillisecondsSinceEpoch(0),
-  );
-
   final String id;
   final String descripcion;
   final DateTime fechaCreacion;

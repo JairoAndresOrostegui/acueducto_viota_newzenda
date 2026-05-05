@@ -83,7 +83,10 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
             );
       setState(() {
         _periods = billablePeriods;
-        _paymentMethods = _withBuiltInPaymentMethods(paymentMethods);
+        _paymentMethods = paymentMethods
+            .where((item) => item.descripcion.trim().isNotEmpty)
+            .toList()
+          ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
         _selectedPeriod = billablePeriods.contains(selected)
             ? selected
             : (billablePeriods.isEmpty ? null : billablePeriods.first);
@@ -116,16 +119,6 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
         setState(() => _loading = false);
       }
     }
-  }
-
-  List<PaymentMethod> _withBuiltInPaymentMethods(List<PaymentMethod> items) {
-    final map = <String, PaymentMethod>{
-      for (final item in items) item.id.trim().toLowerCase(): item,
-      PaymentMethod.cash.id: PaymentMethod.cash,
-    };
-    final merged = map.values.toList()
-      ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
-    return merged;
   }
 
   Future<void> _openPaymentDialog(Invoice invoice) async {

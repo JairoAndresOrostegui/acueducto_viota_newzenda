@@ -7,6 +7,7 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
+    "site": "frontacueductonewzenda",
     "public": "build/web",
     "ignore": [
       "firebase.json",

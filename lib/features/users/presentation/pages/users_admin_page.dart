@@ -120,7 +120,8 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                     ),
                     _MetricCard(
                       label: 'Pendientes',
-                      value: '${_isPendingView ? _users.length : _pendingCount}',
+                      value:
+                          '${_isPendingView ? _users.length : _pendingCount}',
                       color: AppColors.brandBlueSoft,
                       isSelected: _isPendingView,
                       onTap: _showPendingUsers,
@@ -203,12 +204,15 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                       ? const _EmptyState()
                       : ListView.separated(
                           itemCount: _users.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 12),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             final user = _users[index];
                             return _UserCard(
                               user: user,
-                              canDelete: user.uid != widget.currentUser.uid,
+                              canDelete:
+                                  user.uid != widget.currentUser.uid &&
+                                  user.rol != 'administrador',
                               onEdit: () => _openForm(user: user),
                               onDelete: () => _confirmDelete(user),
                             );
@@ -235,9 +239,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                 filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                 child: ColoredBox(
                   color: AppColors.textPrimary.withValues(alpha: 0.18),
-                  child: const Center(
-                    child: _SavingOverlay(),
-                  ),
+                  child: const Center(child: _SavingOverlay()),
                 ),
               ),
             ),
@@ -307,10 +309,12 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
   Future<void> _loadUserMetrics() async {
     try {
       final allUsers = await _userService.fetchAllUsers();
-      final activeCount =
-          allUsers.where((user) => user.estado == 'activo').length;
-      final clientCount =
-          allUsers.where((user) => user.rol == 'cliente').length;
+      final activeCount = allUsers
+          .where((user) => user.estado == 'activo')
+          .length;
+      final clientCount = allUsers
+          .where((user) => user.rol == 'cliente')
+          .length;
       final pendingCount = allUsers.where(_hasIncompleteProfile).length;
       if (!mounted) {
         return;
@@ -372,10 +376,8 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
         _isLoadingUsers = false;
         _users = pendingUsers;
         _pendingCount = pendingUsers.length;
-        _activeCount =
-            allUsers.where((user) => user.estado == 'activo').length;
-        _clientCount =
-            allUsers.where((user) => user.rol == 'cliente').length;
+        _activeCount = allUsers.where((user) => user.estado == 'activo').length;
+        _clientCount = allUsers.where((user) => user.rol == 'cliente').length;
         _currentPageIndex = 0;
         _hasNextPage = false;
       });
@@ -461,6 +463,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
           documentTypes: documentTypes,
           roles: roles,
           sectors: sectors,
+          allowEmptyFields: widget.currentUser.superAdmin,
         ),
       );
 
@@ -505,9 +508,7 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       }
       final message = switch (error) {
         FirebaseFunctionsException _ =>
-          error.message ??
-              error.details?.toString() ??
-              error.code,
+          error.message ?? error.details?.toString() ?? error.code,
         _ => error.toString(),
       };
       await showDialog<void>(
@@ -531,25 +532,56 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
   }
 
   Future<void> _confirmDelete(AppUser user) async {
+    final confirmationController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar usuario'),
-        content: Text(
-          'Se eliminara el perfil de ${toDisplayUserName(user.nombre)}.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final canConfirm =
+                confirmationController.text.trim().toUpperCase() == 'ELIMINAR';
+            return AlertDialog(
+              title: const Text('Eliminar usuario'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Se eliminara el perfil de ${toDisplayUserName(user.nombre)}.',
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Una vez eliminado, este usuario no podra ser recuperado.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: confirmationController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: 'Escribe ELIMINAR para confirmar',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: canConfirm
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  child: const Text('Eliminar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+    confirmationController.dispose();
 
     if (confirmed != true) {
       return;
@@ -589,6 +621,7 @@ class UserFormDialog extends StatefulWidget {
     required this.documentTypes,
     required this.roles,
     required this.sectors,
+    required this.allowEmptyFields,
     this.user,
   });
 
@@ -596,6 +629,7 @@ class UserFormDialog extends StatefulWidget {
   final List<CatalogItem> documentTypes;
   final List<CatalogItem> roles;
   final List<CatalogItem> sectors;
+  final bool allowEmptyFields;
 
   @override
   State<UserFormDialog> createState() => _UserFormDialogState();
@@ -625,9 +659,11 @@ class _UserFormDialogState extends State<UserFormDialog> {
             ? ''
             : widget.user!.numeroContador.first,
       );
-  late final TextEditingController _correoController =
-      TextEditingController(text: widget.user?.correo ?? '');
-  late final TextEditingController _passwordController = TextEditingController();
+  late final TextEditingController _correoController = TextEditingController(
+    text: widget.user?.correo ?? '',
+  );
+  late final TextEditingController _passwordController =
+      TextEditingController();
 
   late String? _tipoDocumento = _initialDocumentType();
   late String? _rol = _initialRole();
@@ -639,8 +675,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   bool get _isClient => _rol == 'cliente';
 
   List<TextInputFormatter> get _codeInputFormatters => [
-        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-      ];
+    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+  ];
 
   @override
   void initState() {
@@ -700,10 +736,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                           ),
                           _FieldBox(
                             width: width * 2 + 16,
-                            child: _text(
-                              _nombreController,
-                              'Nombre completo',
-                            ),
+                            child: _text(_nombreController, 'Nombre completo'),
                           ),
                           _FieldBox(width: width, child: _selectDoc()),
                           _FieldBox(
@@ -745,8 +778,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
                               _numeroContadorController,
                               'Código contador',
                               enabled: _isClient,
-                              validator:
-                                  _isClient ? _meterNumbersValidator : null,
+                              validator: _isClient
+                                  ? _meterNumbersValidator
+                                  : null,
                               textCapitalization: TextCapitalization.characters,
                               inputFormatters: _codeInputFormatters,
                             ),
@@ -776,9 +810,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
                               minimumSize: const Size(0, 48),
                             ),
                             child: Text(
-                              _isEditing
-                                  ? 'Guardar cambios'
-                                  : 'Crear usuario',
+                              _isEditing ? 'Guardar cambios' : 'Crear usuario',
                             ),
                           ),
                         ],
@@ -825,6 +857,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
       ),
       validator: (value) {
         final text = value?.trim() ?? '';
+        if (widget.allowEmptyFields && text.isEmpty) {
+          return null;
+        }
         if (!_isEditing && !_isClient && text.length < 8) {
           return 'La clave debe tener al menos 8 caracteres.';
         }
@@ -931,13 +966,13 @@ class _UserFormDialogState extends State<UserFormDialog> {
       decoration: const InputDecoration(labelText: 'Tipo cliente'),
       items: _isClient
           ? _clientTypes
-              .map(
-                (item) => DropdownMenuItem(
-                  value: item,
-                  child: Text(toDisplayText(item)),
-                ),
-              )
-              .toList()
+                .map(
+                  (item) => DropdownMenuItem(
+                    value: item,
+                    child: Text(toDisplayText(item)),
+                  ),
+                )
+                .toList()
           : const [DropdownMenuItem(value: 'na', child: Text('NA'))],
       onChanged: _isClient
           ? (value) {
@@ -959,37 +994,42 @@ class _UserFormDialogState extends State<UserFormDialog> {
   }
 
   Widget _selectSector() {
+    final sectorItems = [
+      if (widget.allowEmptyFields)
+        const DropdownMenuItem(value: 'na', child: Text('Sin sector')),
+      ...widget.sectors.map(
+        (item) => DropdownMenuItem(
+          value: item.valor,
+          child: Text(
+            toDisplayText(item.nombre),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    ];
+    final selectedSectorItems = [
+      if (widget.allowEmptyFields)
+        const Align(alignment: Alignment.centerLeft, child: Text('Sin sector')),
+      ...widget.sectors.map(
+        (item) => Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            toDisplayText(item.nombre),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    ];
+
     return DropdownButtonFormField<String>(
       isExpanded: true,
       initialValue: _isClient ? _sector : 'na',
       decoration: const InputDecoration(labelText: 'Sector'),
       selectedItemBuilder: (_) => _isClient
-          ? widget.sectors
-              .map(
-                (item) => Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    toDisplayText(item.nombre),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              )
-              .toList()
-          : const [
-              Align(alignment: Alignment.centerLeft, child: Text('NA')),
-            ],
+          ? selectedSectorItems
+          : const [Align(alignment: Alignment.centerLeft, child: Text('NA'))],
       items: _isClient
-          ? widget.sectors
-              .map(
-                (item) => DropdownMenuItem(
-                  value: item.valor,
-                  child: Text(
-                    toDisplayText(item.nombre),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              )
-              .toList()
+          ? sectorItems
           : const [DropdownMenuItem(value: 'na', child: Text('NA'))],
       onChanged: _isClient ? (value) => setState(() => _sector = value) : null,
       validator: (_) {
@@ -997,10 +1037,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
           return null;
         }
         if (widget.sectors.isEmpty) {
-          return 'No hay sectores activos.';
+          return widget.allowEmptyFields ? null : 'No hay sectores activos.';
         }
         if ((_sector ?? '').trim().isEmpty) {
-          return 'Selecciona un sector.';
+          return widget.allowEmptyFields ? null : 'Selecciona un sector.';
         }
         return null;
       },
@@ -1018,6 +1058,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
   }
 
   String? _required(String? value) {
+    if (widget.allowEmptyFields) {
+      return null;
+    }
     if (value == null || value.trim().isEmpty) {
       return 'Campo obligatorio.';
     }
@@ -1029,7 +1072,11 @@ class _UserFormDialogState extends State<UserFormDialog> {
     if (base != null) {
       return base;
     }
-    if (!RegExp(r'^[a-zA-Z0-9]+$').hasMatch(value!.trim())) {
+    final text = value?.trim() ?? '';
+    if (widget.allowEmptyFields && text.isEmpty) {
+      return null;
+    }
+    if (!RegExp(r'^[a-zA-Z0-9]+$').hasMatch(text)) {
       return 'Solo se permiten letras y numeros.';
     }
     return null;
@@ -1042,7 +1089,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
     }
     final items = _parseMeterNumbers(value ?? '');
     if (items.isEmpty) {
-      return 'Ingresa el contador.';
+      return widget.allowEmptyFields ? null : 'Ingresa el contador.';
     }
     if (items.any((item) => !RegExp(r'^[a-zA-Z0-9]+$').hasMatch(item))) {
       return 'El contador debe contener solo letras y numeros.';
@@ -1058,7 +1105,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
     if (base != null) {
       return base;
     }
-    final text = value!.trim();
+    final text = value?.trim() ?? '';
+    if (widget.allowEmptyFields && text.isEmpty) {
+      return null;
+    }
     if (!text.contains('@') || !text.contains('.')) {
       return 'Correo inválido.';
     }
@@ -1067,15 +1117,18 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
   String? _initialDocumentType() {
     if (widget.user != null &&
-        widget.documentTypes
-            .any((item) => item.valor == widget.user!.tipoDocumento)) {
+        widget.documentTypes.any(
+          (item) => item.valor == widget.user!.tipoDocumento,
+        )) {
       return widget.user!.tipoDocumento;
     }
     final preferred = widget.documentTypes.where((item) => item.valor == 'cc');
     if (preferred.isNotEmpty) {
       return preferred.first.valor;
     }
-    return widget.documentTypes.isEmpty ? null : widget.documentTypes.first.valor;
+    return widget.documentTypes.isEmpty
+        ? null
+        : widget.documentTypes.first.valor;
   }
 
   String? _initialRole() {
@@ -1091,6 +1144,10 @@ class _UserFormDialogState extends State<UserFormDialog> {
   }
 
   String? _initialSector() {
+    if (widget.allowEmptyFields &&
+        (widget.user == null || widget.user!.sector == 'na')) {
+      return 'na';
+    }
     if (widget.user != null &&
         widget.user!.sector != 'na' &&
         widget.sectors.any((item) => item.valor == widget.user!.sector)) {
@@ -1100,7 +1157,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
   }
 
   String _initialClientType() {
-    if (widget.user != null && _clientTypes.contains(widget.user!.tipoCliente)) {
+    if (widget.user != null &&
+        _clientTypes.contains(widget.user!.tipoCliente)) {
       return widget.user!.tipoCliente;
     }
     return _clientTypes.first;
@@ -1145,8 +1203,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
       tipoDocumento: _tipoDocumento!,
       numeroDocumento: _numeroDocumentoController.text.trim(),
       numeroContacto: _numeroContactoController.text.trim(),
-      codigoUsuario:
-          _isClient ? _codigoUsuarioController.text.trim().toUpperCase() : 'na',
+      codigoUsuario: _isClient
+          ? _codigoUsuarioController.text.trim().toUpperCase()
+          : 'na',
       numeroContador: _isClient
           ? _parseMeterNumbers(_numeroContadorController.text)
           : const [],
@@ -1155,6 +1214,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
       sector: _isClient ? (_sector ?? '') : 'na',
       correo: _correoController.text.trim().toLowerCase(),
       estado: _estado,
+      superAdmin: existing?.superAdmin ?? false,
       fechaCreacion: existing?.fechaCreacion ?? now,
       fechaActualizacion: existing == null ? null : now,
     );
@@ -1179,20 +1239,14 @@ class _UserFormDialogState extends State<UserFormDialog> {
 }
 
 class UserFormResult {
-  const UserFormResult({
-    required this.user,
-    required this.password,
-  });
+  const UserFormResult({required this.user, required this.password});
 
   final AppUser user;
   final String? password;
 }
 
 class LegacyUsersHeader extends StatelessWidget {
-  const LegacyUsersHeader({
-    super.key,
-    required this.onCreate,
-  });
+  const LegacyUsersHeader({super.key, required this.onCreate});
 
   final VoidCallback onCreate;
 
@@ -1221,9 +1275,7 @@ class LegacyUsersHeader extends StatelessWidget {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: onCreate,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
                 icon: const Icon(Icons.person_add_alt_1_rounded),
                 label: const Text('Nuevo usuario'),
               ),
@@ -1237,9 +1289,7 @@ class LegacyUsersHeader extends StatelessWidget {
             const SizedBox(width: 16),
             ElevatedButton.icon(
               onPressed: onCreate,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(0, 48),
-              ),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
               icon: const Icon(Icons.person_add_alt_1_rounded),
               label: const Text('Nuevo usuario'),
             ),
@@ -1273,9 +1323,7 @@ class _UsersPageHeader extends StatelessWidget {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: onCreate,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
                 icon: const Icon(Icons.person_add_alt_1_rounded),
                 label: const Text('Nuevo usuario'),
               ),
@@ -1289,9 +1337,7 @@ class _UsersPageHeader extends StatelessWidget {
             const SizedBox(width: 16),
             ElevatedButton.icon(
               onPressed: onCreate,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(0, 48),
-              ),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
               icon: const Icon(Icons.person_add_alt_1_rounded),
               label: const Text('Nuevo usuario'),
             ),
@@ -1458,14 +1504,17 @@ class _MetricCard extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
               const SizedBox(width: 10),
               Text(
                 value,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -1534,9 +1583,7 @@ class _UserCard extends StatelessWidget {
             children: [
               OutlinedButton.icon(
                 onPressed: onEdit,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                ),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
               ),
@@ -1621,10 +1668,7 @@ class _UserCard extends StatelessWidget {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.label,
-    required this.value,
-  });
+  const _InfoChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1658,10 +1702,7 @@ class _InfoChip extends StatelessWidget {
 }
 
 class _FieldBox extends StatelessWidget {
-  const _FieldBox({
-    required this.width,
-    required this.child,
-  });
+  const _FieldBox({required this.width, required this.child});
 
   final double width;
   final Widget child;
@@ -1685,7 +1726,9 @@ class _EmptyState extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: AppColors.border),
         ),
-        child: const Text('No hay usuarios que coincidan con el filtro actual.'),
+        child: const Text(
+          'No hay usuarios que coincidan con el filtro actual.',
+        ),
       ),
     );
   }
@@ -1725,11 +1768,7 @@ class _SavingOverlay extends StatelessWidget {
       child: const Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(),
-          ),
+          SizedBox(width: 36, height: 36, child: CircularProgressIndicator()),
           SizedBox(height: 16),
           Text('Guardando usuario...'),
         ],

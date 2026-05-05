@@ -33,7 +33,7 @@ El sistema cubre el flujo principal de operacion:
 - PDF por recibo, por periodo y por sector
 - gestion de medios de pago y observaciones de facturacion
 - registro y reversa de pagos
-- suspension administrativa de facturas en mora
+- suspension administrativa de facturas no pagadas
 - consulta de recibo pendiente por cliente
 - acceso del contador a reportes y cartera pendiente
 
@@ -43,6 +43,7 @@ El sistema cubre el flujo principal de operacion:
 - `operador`: acceso directo a `Registrar consumos`.
 - `cliente`: acceso directo al recibo pendiente mas reciente.
 - `contador`: acceso restringido a `Consumos > Reportes`.
+- `fiscal`: acceso restringido a `Consumos > Reportes`, igual que contador.
 
 ## Revision pantalla por pantalla
 
@@ -144,7 +145,7 @@ Archivo principal: `lib/features/consumptions/presentation/pages/consumption_sus
 - Lista facturas por periodo desde `2026-01`.
 - Busca por nombre, codigo de usuario o codigo de contador.
 - Filtra por `Todos`, `Al día`, `En mora` y `Suspendidas`.
-- Solo permite suspender facturas con estado de periodo anterior `en_mora`.
+- Permite suspender facturas no pagadas, incluso si estan al dia.
 - No permite suspender facturas ya pagadas.
 
 ### Facturacion
@@ -204,8 +205,8 @@ Archivo principal: `lib/features/billing/invoices/presentation/pages/client_invo
 - La regeneracion masiva e individual no modifica recibos pagados.
 - Los estados internos como `al_dia` se muestran al usuario como `Al día`.
 - El cliente solo ve recibos asociados a su `codigoUsuario`.
-- El contador tiene acceso de solo lectura a reportes y cartera.
-- Las suspensiones solo aplican a facturas en mora y no pagadas.
+- El contador y el fiscal tienen acceso de solo lectura a reportes y cartera.
+- Las suspensiones aplican a facturas no pagadas, incluidas las que estan al dia.
 
 ## Colecciones principales
 
