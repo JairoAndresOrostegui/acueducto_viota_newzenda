@@ -8,6 +8,8 @@ class BillingPeriodFirestoreService {
 
   static const int firstAllowedYear = 2025;
   static const int firstAllowedMonth = 12;
+  static const int firstOperationalYear = 2026;
+  static const int firstOperationalMonth = 1;
 
   final FirebaseFirestore? _firestore;
 
@@ -25,6 +27,14 @@ class BillingPeriodFirestoreService {
   Future<List<BillingPeriod>> fetchPeriods() async {
     final snapshot = await _collection.get();
     return _sortPeriods(snapshot.docs.map(BillingPeriod.fromFirestore).toList());
+  }
+
+  Stream<List<BillingPeriod>> watchOperationalPeriods() {
+    return watchPeriods().map(_filterOperationalPeriods);
+  }
+
+  Future<List<BillingPeriod>> fetchOperationalPeriods() async {
+    return _filterOperationalPeriods(await fetchPeriods());
   }
 
   Future<BillingPeriod?> fetchActivePeriod() async {
@@ -140,6 +150,27 @@ class BillingPeriodFirestoreService {
       return false;
     }
     return mes >= 1 && mes <= 12;
+  }
+
+  static bool isBasePeriod(BillingPeriod period) {
+    return period.ano == firstAllowedYear && period.mes == firstAllowedMonth;
+  }
+
+  static bool isOperationalPeriod(BillingPeriod period) {
+    if (period.ano < firstOperationalYear) {
+      return false;
+    }
+    if (period.ano == firstOperationalYear &&
+        period.mes < firstOperationalMonth) {
+      return false;
+    }
+    return period.mes >= 1 && period.mes <= 12;
+  }
+
+  static List<BillingPeriod> _filterOperationalPeriods(
+    List<BillingPeriod> items,
+  ) {
+    return items.where(isOperationalPeriod).toList();
   }
 
   static void _validateAllowedPeriod(int ano, int mes) {

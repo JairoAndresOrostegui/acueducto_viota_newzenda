@@ -54,6 +54,28 @@ class ConsumptionConflictFirestoreService {
     return items;
   }
 
+  Future<List<ConsumptionConflict>> fetchResolvedConflicts({
+    int limit = 100,
+  }) async {
+    final snapshot = await _collection
+        .where('estado', isEqualTo: 'resuelto')
+        .limit(limit)
+        .get();
+    final items = snapshot.docs
+        .map((doc) => ConsumptionConflict.fromFirestore(doc.id, doc.data()))
+        .toList();
+    items.sort((a, b) {
+      final resolvedCompare = (b.fechaResolucion ?? b.fecha).compareTo(
+        a.fechaResolucion ?? a.fecha,
+      );
+      if (resolvedCompare != 0) {
+        return resolvedCompare;
+      }
+      return b.fecha.compareTo(a.fecha);
+    });
+    return items;
+  }
+
   Future<void> resolveConflict({
     required ConsumptionConflict conflict,
     required ConsumptionReading finalReading,

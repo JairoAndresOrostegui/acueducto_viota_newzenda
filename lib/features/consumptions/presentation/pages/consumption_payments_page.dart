@@ -28,7 +28,6 @@ class ConsumptionPaymentsPage extends StatefulWidget {
 }
 
 class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
-  static const String _accountingStartPeriodId = '2026-01';
 
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
@@ -68,13 +67,11 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
     });
     try {
       final results = await Future.wait([
-        _periodService.fetchPeriods(),
+        _periodService.fetchOperationalPeriods(),
         _paymentMethodService.fetchItems(),
       ]);
       final periods = results[0] as List<BillingPeriod>;
       final paymentMethods = results[1] as List<PaymentMethod>;
-      final billablePeriods =
-          periods.where((item) => item.id.compareTo(_accountingStartPeriodId) >= 0).toList();
       final selected = periods.isEmpty
           ? null
           : periods.firstWhere(
@@ -82,14 +79,14 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
               orElse: () => periods.first,
             );
       setState(() {
-        _periods = billablePeriods;
+        _periods = periods;
         _paymentMethods = paymentMethods
             .where((item) => item.descripcion.trim().isNotEmpty)
             .toList()
           ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
-        _selectedPeriod = billablePeriods.contains(selected)
+        _selectedPeriod = periods.contains(selected)
             ? selected
-            : (billablePeriods.isEmpty ? null : billablePeriods.first);
+            : (periods.isEmpty ? null : periods.first);
       });
       if (_selectedPeriod != null) {
         await _loadInvoices(_selectedPeriod!);

@@ -180,11 +180,12 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
   late final List<_AdditionalValueFormRow> _additionalRows;
 
   bool get _isEditing => widget.item != null;
+  bool get _showAdditionalValuesSection => false;
 
   @override
   void initState() {
     super.initState();
-    _periodsFuture = BillingPeriodFirestoreService().fetchPeriods();
+    _periodsFuture = BillingPeriodFirestoreService().fetchOperationalPeriods();
     _cargoFijoController = TextEditingController(
       text: widget.item?.cargoFijo.toString() ?? '',
     );
@@ -281,6 +282,7 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                   ),
                   const SizedBox(height: 12),
                   ..._buildRangeRows(),
+                  if (_showAdditionalValuesSection) ...[
                   const SizedBox(height: 24),
                   Row(
                     children: [
@@ -307,6 +309,7 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                   ),
                   const SizedBox(height: 12),
                   _buildAdditionalRows(),
+                  ],
                   const SizedBox(height: 24),
                   Wrap(
                     alignment: WrapAlignment.end,

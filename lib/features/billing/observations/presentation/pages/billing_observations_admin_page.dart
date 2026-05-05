@@ -56,7 +56,7 @@ class _BillingObservationsAdminPageState
     setState(() => _loadingReferences = true);
     try {
       final results = await Future.wait([
-        _periodService.fetchPeriods(),
+        _periodService.fetchOperationalPeriods(),
         _userService.fetchActiveClients(),
       ]);
       if (!mounted) {

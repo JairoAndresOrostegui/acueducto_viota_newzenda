@@ -185,12 +185,16 @@ class InvoiceFirestoreService {
         .where((item) => item.isNotEmpty)
         .toList();
     final paymentText = paymentLines.join('\n');
-    final previousInvoicesByMeter = await _fetchPreviousInvoicesByMeter(period);
+    final previousInvoicesByMeter = await _fetchPreviousInvoiceHistoryByMeter(
+      period,
+    );
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
 
     final batch = _db.batch();
     for (final reading in readings) {
+      final previousInvoices =
+          previousInvoicesByMeter[reading.codigoContador] ?? const <Invoice>[];
       final invoice = _buildInvoice(
         period: period,
         reading: reading,
@@ -199,7 +203,7 @@ class InvoiceFirestoreService {
         paymentLines: paymentLines,
         generatedAt: now,
         dueDate: dueDate,
-        previousInvoice: previousInvoicesByMeter[reading.codigoContador],
+        previousInvoices: previousInvoices,
         sector:
             usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
             '',
@@ -222,7 +226,7 @@ class InvoiceFirestoreService {
               facturado: true,
               pagado: false,
               reciboId: invoice.id,
-              estado: 'facturado',
+              estado: invoice.estado,
             )
             .toFirestore(),
         SetOptions(merge: true),
@@ -368,7 +372,9 @@ class InvoiceFirestoreService {
         .where((item) => item.isNotEmpty)
         .toList();
     final paymentText = paymentLines.join('\n');
-    final previousInvoicesByMeter = await _fetchPreviousInvoicesByMeter(period);
+    final previousInvoicesByMeter = await _fetchPreviousInvoiceHistoryByMeter(
+      period,
+    );
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
 
@@ -385,6 +391,8 @@ class InvoiceFirestoreService {
       if (reading == null) {
         continue;
       }
+      final previousInvoices =
+          previousInvoicesByMeter[reading.codigoContador] ?? const <Invoice>[];
       final invoice = _buildInvoice(
         period: period,
         reading: reading,
@@ -393,7 +401,7 @@ class InvoiceFirestoreService {
         paymentLines: paymentLines,
         generatedAt: now,
         dueDate: dueDate,
-        previousInvoice: previousInvoicesByMeter[reading.codigoContador],
+        previousInvoices: previousInvoices,
         sector:
             usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
             '',
@@ -408,6 +416,16 @@ class InvoiceFirestoreService {
       batch.set(
         _periodInvoices(period.id).doc(invoice.id),
         invoice.toFirestore(),
+        SetOptions(merge: true),
+      );
+      batch.set(
+        _periodConsumptions(period.id).doc(reading.codigoContador),
+        {
+          'estado': invoice.estado,
+          'reciboId': invoice.id,
+          'pagado': invoice.pagado,
+          'facturado': true,
+        },
         SetOptions(merge: true),
       );
       regeneratedCount++;
@@ -454,7 +472,11 @@ class InvoiceFirestoreService {
         .toList();
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
-    final previousInvoicesByMeter = await _fetchPreviousInvoicesByMeter(period);
+    final previousInvoicesByMeter = await _fetchPreviousInvoiceHistoryByMeter(
+      period,
+    );
+    final previousInvoices =
+        previousInvoicesByMeter[reading.codigoContador] ?? const <Invoice>[];
     final invoice = _buildInvoice(
       period: period,
       reading: reading,
@@ -463,7 +485,7 @@ class InvoiceFirestoreService {
       paymentLines: paymentLines,
       generatedAt: now,
       dueDate: dueDate,
-      previousInvoice: previousInvoicesByMeter[reading.codigoContador],
+      previousInvoices: previousInvoices,
       sector:
           usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
       appliedObservations: _resolveAppliedObservations(
@@ -475,9 +497,23 @@ class InvoiceFirestoreService {
       existingInvoice: existing,
     );
 
-    await _periodInvoices(
-      period.id,
-    ).doc(invoice.id).set(invoice.toFirestore(), SetOptions(merge: true));
+    final batch = _db.batch();
+    batch.set(
+      _periodInvoices(period.id).doc(invoice.id),
+      invoice.toFirestore(),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _periodConsumptions(period.id).doc(invoice.codigoContador),
+      {
+        'estado': invoice.estado,
+        'reciboId': invoice.id,
+        'pagado': invoice.pagado,
+        'facturado': true,
+      },
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Invoice _buildInvoice({
@@ -488,12 +524,15 @@ class InvoiceFirestoreService {
     required List<String> paymentLines,
     required DateTime generatedAt,
     required DateTime dueDate,
-    required Invoice? previousInvoice,
+    required List<Invoice> previousInvoices,
     required String sector,
     required List<InvoiceAppliedObservation> appliedObservations,
     required AppUser actor,
     Invoice? existingInvoice,
   }) {
+    final previousInvoice = previousInvoices.isEmpty
+        ? null
+        : previousInvoices.first;
     final previousReading = reading.lecturaAnterior ?? 0;
     final consumption =
         reading.consumoCalculado ??
@@ -541,7 +580,7 @@ class InvoiceFirestoreService {
       lineas: lineItems,
       mediosPagoTexto: paymentText,
       mediosPago: paymentLines,
-      estado: 'facturado',
+      estado: _resolveCurrentInvoiceStatus(previousInvoices, existingInvoice),
       valorConfigId: values.id,
       valorConfigVersion: values.version,
       total: subtotal,
@@ -557,19 +596,22 @@ class InvoiceFirestoreService {
     );
   }
 
-  Future<Map<String, Invoice>> _fetchPreviousInvoicesByMeter(
+  Future<Map<String, List<Invoice>>> _fetchPreviousInvoiceHistoryByMeter(
     BillingPeriod period,
   ) async {
     final previousPeriodIds = await _fetchPreviousBillablePeriodIds(period.id);
     if (previousPeriodIds.isEmpty) {
       return const {};
     }
-    final result = <String, Invoice>{};
+    final result = <String, List<Invoice>>{};
     for (final previousPeriodId in previousPeriodIds) {
       final items = await fetchInvoicesForPeriod(previousPeriodId);
       for (final item in items) {
-        result.putIfAbsent(item.codigoContador, () => item);
+        result.putIfAbsent(item.codigoContador, () => <Invoice>[]).add(item);
       }
+    }
+    for (final invoices in result.values) {
+      invoices.sort((a, b) => b.periodo.compareTo(a.periodo));
     }
     return result;
   }
@@ -642,6 +684,50 @@ class InvoiceFirestoreService {
       return 'al_dia';
     }
     return 'en_mora';
+  }
+
+  String _resolveCurrentInvoiceStatus(
+    List<Invoice> previousInvoices,
+    Invoice? existingInvoice,
+  ) {
+    if (existingInvoice?.estaSuspendido == true) {
+      return 'suspendido';
+    }
+    if (_shouldAutoSuspend(previousInvoices)) {
+      return 'suspendido';
+    }
+    return 'facturado';
+  }
+
+  bool _shouldAutoSuspend(List<Invoice> previousInvoices) {
+    if (previousInvoices.isEmpty) {
+      return false;
+    }
+    if (previousInvoices.first.estaSuspendido) {
+      return true;
+    }
+    var consecutiveDebtPeriods = 0;
+    for (final invoice in previousInvoices) {
+      if (_isDebtInvoice(invoice)) {
+        consecutiveDebtPeriods++;
+        if (consecutiveDebtPeriods >= 2) {
+          return true;
+        }
+        continue;
+      }
+      break;
+    }
+    return false;
+  }
+
+  bool _isDebtInvoice(Invoice invoice) {
+    if (!_isAccountingPeriodId(invoice.periodo)) {
+      return false;
+    }
+    if (invoice.estaPagado || invoice.saldoPendiente <= 0) {
+      return false;
+    }
+    return true;
   }
 
   int _resolvePreviousBalance(Invoice? previousInvoice) {

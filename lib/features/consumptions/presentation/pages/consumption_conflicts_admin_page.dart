@@ -57,7 +57,11 @@ class _ConsumptionConflictsAdminPageState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ConflictsHeader(pendingCount: _items.length, onRefresh: _load),
+              _ConflictsHeader(
+                pendingCount: _items.length,
+                onRefresh: _load,
+                onHistory: _openHistory,
+              ),
               const SizedBox(height: 20),
               Expanded(
                 child: _items.isEmpty
@@ -131,6 +135,16 @@ class _ConsumptionConflictsAdminPageState
             .trim()
             .toUpperCase()] ??
         '';
+  }
+
+  Future<void> _openHistory() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _ConflictHistoryDialog(
+        conflictService: _conflictService,
+        sectorsByUserCode: _sectorsByUserCode,
+      ),
+    );
   }
 
   Future<void> _resolve(ConsumptionConflict conflict) async {
@@ -231,11 +245,38 @@ String _displaySector(String value) {
   return toDisplayText(normalized);
 }
 
+String _formatDateTime(DateTime? value) {
+  if (value == null) {
+    return 'Sin fecha';
+  }
+  final date =
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  final time =
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  return '$date $time';
+}
+
+String _motivoLabel(String value) {
+  switch (value) {
+    case 'lectura_existente':
+      return 'Lectura duplicada';
+    case 'lectura_menor':
+      return 'Lectura menor que la anterior';
+    default:
+      return value;
+  }
+}
+
 class _ConflictsHeader extends StatelessWidget {
-  const _ConflictsHeader({required this.pendingCount, required this.onRefresh});
+  const _ConflictsHeader({
+    required this.pendingCount,
+    required this.onRefresh,
+    required this.onHistory,
+  });
 
   final int pendingCount;
   final Future<void> Function() onRefresh;
+  final VoidCallback onHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -260,11 +301,24 @@ class _ConflictsHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 16),
-        ElevatedButton.icon(
-          onPressed: onRefresh,
-          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('Actualizar'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.end,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onHistory,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('Histórico'),
+            ),
+            ElevatedButton.icon(
+              onPressed: onRefresh,
+              style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Actualizar'),
+            ),
+          ],
         ),
       ],
     );
@@ -347,15 +401,168 @@ class _ConflictCard extends StatelessWidget {
     );
   }
 
-  String _motivoLabel(String value) {
-    switch (value) {
-      case 'lectura_existente':
-        return 'Lectura duplicada';
-      case 'lectura_menor':
-        return 'Lectura menor que la anterior';
-      default:
-        return value;
+}
+
+class _ConflictHistoryDialog extends StatefulWidget {
+  const _ConflictHistoryDialog({
+    required this.conflictService,
+    required this.sectorsByUserCode,
+  });
+
+  final ConsumptionConflictFirestoreService conflictService;
+  final Map<String, String> sectorsByUserCode;
+
+  @override
+  State<_ConflictHistoryDialog> createState() => _ConflictHistoryDialogState();
+}
+
+class _ConflictHistoryDialogState extends State<_ConflictHistoryDialog> {
+  late final Future<List<ConsumptionConflict>> _future =
+      widget.conflictService.fetchResolvedConflicts(limit: 200);
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 860, maxHeight: 680),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Histórico de conflictos',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Cerrar',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Se muestran los conflictos resueltos más recientes.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: FutureBuilder<List<ConsumptionConflict>>(
+                  future: _future,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'No fue posible cargar el histórico: ${snapshot.error}',
+                        ),
+                      );
+                    }
+                    final items = snapshot.data ?? const <ConsumptionConflict>[];
+                    if (items.isEmpty) {
+                      return const Center(
+                        child: Text('No hay conflictos resueltos.'),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: items.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return _ConflictHistoryCard(
+                          item: item,
+                          sector: _sectorFor(item),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _sectorFor(ConsumptionConflict item) {
+    final fromReading = item.lecturaPropuesta.sector.trim();
+    if (fromReading.isNotEmpty) {
+      return fromReading;
     }
+    return widget.sectorsByUserCode[item.lecturaPropuesta.codigoUsuario
+            .trim()
+            .toUpperCase()] ??
+        '';
+  }
+}
+
+class _ConflictHistoryCard extends StatelessWidget {
+  const _ConflictHistoryCard({required this.item, required this.sector});
+
+  final ConsumptionConflict item;
+  final String sector;
+
+  @override
+  Widget build(BuildContext context) {
+    final finalReading = item.lecturaFinal;
+    final existing = item.lecturaExistente;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                toDisplayUserName(item.lecturaPropuesta.nombreUsuario),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Chip(label: Text(_motivoLabel(item.motivo))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Código usuario: ${item.lecturaPropuesta.codigoUsuario} - Contador: ${item.lecturaPropuesta.codigoContador}',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Periodo: ${item.lecturaPropuesta.periodoActual} - Sector: ${_displaySector(sector)}',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 18,
+            runSpacing: 6,
+            children: [
+              Text('Propuesta: ${item.lecturaPropuesta.lecturaActual}'),
+              if (existing != null)
+                Text('Anterior en sistema: ${existing.lecturaActual}'),
+              if (finalReading != null)
+                Text('Final: ${finalReading.lecturaActual}'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Resuelto por: ${toDisplayUserName(item.resueltoPorNombre ?? 'NA')} - ${_formatDateTime(item.fechaResolucion)}',
+          ),
+        ],
+      ),
+    );
   }
 }
 

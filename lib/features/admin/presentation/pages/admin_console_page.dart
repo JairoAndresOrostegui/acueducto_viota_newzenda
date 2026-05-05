@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:frontacueductonewzenda/features/accounts/presentation/pages/account_payments_page.dart';
+import 'package:frontacueductonewzenda/features/accounts/presentation/pages/accounts_overview_page.dart';
+import 'package:frontacueductonewzenda/features/accounts/presentation/pages/extraordinary_values_page.dart';
 import 'package:frontacueductonewzenda/features/billing/invoices/presentation/pages/billing_invoices_page.dart';
 import 'package:frontacueductonewzenda/features/billing/observations/presentation/pages/billing_observations_admin_page.dart';
 import 'package:frontacueductonewzenda/features/billing/payment_methods/presentation/pages/payment_methods_admin_page.dart';
@@ -7,10 +10,11 @@ import 'package:frontacueductonewzenda/features/billing/values/presentation/page
 import 'package:frontacueductonewzenda/features/catalogs/presentation/pages/catalog_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_conflicts_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_import_page.dart';
-import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_payments_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_suspensions_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
-import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_reports_admin_page.dart';
+import 'package:frontacueductonewzenda/features/reports/presentation/pages/billing_reports_page.dart';
+import 'package:frontacueductonewzenda/features/reports/presentation/pages/consumption_reports_placeholder_page.dart';
+import 'package:frontacueductonewzenda/features/reports/presentation/pages/portfolio_reports_page.dart';
 
 import '../../../../theme/app_colors.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
@@ -48,11 +52,14 @@ class AdminConsolePage extends StatefulWidget {
 
 class _AdminConsolePageState extends State<AdminConsolePage> {
   int _selectedModuleIndex = 0;
-  final List<int> _selectedScreenIndexes = [0, 0, 0];
+  final List<int> _selectedScreenIndexes = [0, 0, 0, 0, 0];
 
   @override
   Widget build(BuildContext context) {
     final modules = _buildModules();
+    if (_selectedModuleIndex >= modules.length) {
+      _selectedModuleIndex = 0;
+    }
     final selectedModule = modules[_selectedModuleIndex];
     final selectedScreenIndex = _selectedScreenIndexes[_selectedModuleIndex]
         .clamp(0, selectedModule.screens.length - 1);
@@ -89,73 +96,78 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
   }
 
   List<_AdminModule> _buildModules() {
+    final userScreens = <_AdminScreen>[
+      _AdminScreen(
+        title: 'Usuarios',
+        child: UsersAdminPage(
+          currentUser: widget.currentUser,
+          userService: widget.userService,
+          adminFunctionsService: widget.userAdminFunctionsService,
+          documentTypeService: widget.documentTypeService,
+          roleService: widget.roleService,
+          sectorService: widget.sectorService,
+        ),
+      ),
+      _AdminScreen(
+        title: 'Importar usuarios',
+        child: UsersImportPage(
+          currentUser: widget.currentUser,
+          adminFunctionsService: widget.userAdminFunctionsService,
+        ),
+      ),
+      if (widget.currentUser.superAdmin) ...[
+        _AdminScreen(
+          title: 'Tipos documento',
+          child: CatalogAdminPage(
+            title: 'Tipos de documento',
+            description:
+                'Catalogo usado por el formulario de usuarios. Solo se muestran activos fuera de este modulo.',
+            itemName: 'tipo de documento',
+            valueLabel: 'Valor BD',
+            nameLabel: 'Nombre visible',
+            service:
+                widget.documentTypeService ?? DocumentTypeCatalogService(),
+          ),
+        ),
+        _AdminScreen(
+          title: 'Roles',
+          child: CatalogAdminPage(
+            title: 'Roles',
+            description:
+                'Catalogo de perfiles permitidos para usuarios administrables.',
+            itemName: 'rol',
+            valueLabel: 'Valor BD',
+            nameLabel: 'Nombre visible',
+            service: widget.roleService ?? RoleCatalogService(),
+          ),
+        ),
+      ],
+      _AdminScreen(
+        title: 'Sectores',
+        child: CatalogAdminPage(
+          title: 'Sectores',
+          description:
+              'Solo se ofrecen sectores activos al crear o editar usuarios con rol cliente.',
+          itemName: 'sector',
+          valueLabel: 'Valor BD',
+          nameLabel: 'Nombre visible',
+          service: widget.sectorService ?? SectorCatalogService(),
+          autoValueFromName: true,
+        ),
+      ),
+      if (widget.currentUser.superAdmin)
+        _AdminScreen(
+          title: 'Logs',
+          child: UserLogsPage(
+            service: widget.userAuditLogService ?? UserAuditLogService(),
+          ),
+        ),
+    ];
+
     return [
       _AdminModule(
         title: 'Usuarios',
-        screens: [
-          _AdminScreen(
-            title: 'Usuarios',
-            child: UsersAdminPage(
-              currentUser: widget.currentUser,
-              userService: widget.userService,
-              adminFunctionsService: widget.userAdminFunctionsService,
-              documentTypeService: widget.documentTypeService,
-              roleService: widget.roleService,
-              sectorService: widget.sectorService,
-            ),
-          ),
-          _AdminScreen(
-            title: 'Importar usuarios',
-            child: UsersImportPage(
-              currentUser: widget.currentUser,
-              adminFunctionsService: widget.userAdminFunctionsService,
-            ),
-          ),
-          _AdminScreen(
-            title: 'Tipos documento',
-            child: CatalogAdminPage(
-              title: 'Tipos de documento',
-              description:
-                  'Catalogo usado por el formulario de usuarios. Solo se muestran activos fuera de este modulo.',
-              itemName: 'tipo de documento',
-              valueLabel: 'Valor BD',
-              nameLabel: 'Nombre visible',
-              service:
-                  widget.documentTypeService ?? DocumentTypeCatalogService(),
-            ),
-          ),
-          _AdminScreen(
-            title: 'Roles',
-            child: CatalogAdminPage(
-              title: 'Roles',
-              description:
-                  'Catalogo de perfiles permitidos para usuarios administrables.',
-              itemName: 'rol',
-              valueLabel: 'Valor BD',
-              nameLabel: 'Nombre visible',
-              service: widget.roleService ?? RoleCatalogService(),
-            ),
-          ),
-          _AdminScreen(
-            title: 'Sectores',
-            child: CatalogAdminPage(
-              title: 'Sectores',
-              description:
-                  'Solo se ofrecen sectores activos al crear o editar usuarios con rol cliente.',
-              itemName: 'sector',
-              valueLabel: 'Valor BD',
-              nameLabel: 'Nombre visible',
-              service: widget.sectorService ?? SectorCatalogService(),
-              autoValueFromName: true,
-            ),
-          ),
-          _AdminScreen(
-            title: 'Logs',
-            child: UserLogsPage(
-              service: widget.userAuditLogService ?? UserAuditLogService(),
-            ),
-          ),
-        ],
+        screens: userScreens,
       ),
       _AdminModule(
         title: 'Consumos',
@@ -174,19 +186,25 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
             title: 'Importar consumos',
             child: ConsumptionImportPage(),
           ),
-          const _AdminScreen(
-            title: 'Reportes',
-            child: ConsumptionReportsAdminPage(),
-          ),
-          const _AdminScreen(
-            title: 'Registrar pagos',
-            child: ConsumptionPaymentsPage(),
-          ),
           _AdminScreen(
             title: 'Suspensiones',
             child: ConsumptionSuspensionsAdminPage(
               currentUser: widget.currentUser,
             ),
+          ),
+        ],
+      ),
+      _AdminModule(
+        title: 'Cuentas',
+        screens: [
+          const _AdminScreen(title: 'Cuentas', child: AccountsOverviewPage()),
+          const _AdminScreen(
+            title: 'Registrar pagos',
+            child: AccountPaymentsPage(),
+          ),
+          _AdminScreen(
+            title: 'Extraordinarios',
+            child: ExtraordinaryValuesPage(currentUser: widget.currentUser),
           ),
         ],
       ),
@@ -210,6 +228,20 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
             title: 'Valores',
             child: BillingValuesAdminPage(currentUser: widget.currentUser),
           ),
+        ],
+      ),
+      _AdminModule(
+        title: 'Reportes',
+        screens: const [
+          _AdminScreen(
+            title: 'Facturación',
+            child: BillingReportsPage(),
+          ),
+          _AdminScreen(
+            title: 'Consumos',
+            child: ConsumptionReportsPlaceholderPage(),
+          ),
+          _AdminScreen(title: 'Cartera', child: PortfolioReportsPage()),
         ],
       ),
     ];

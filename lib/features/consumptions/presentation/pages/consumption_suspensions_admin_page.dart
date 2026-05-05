@@ -27,7 +27,6 @@ class ConsumptionSuspensionsAdminPage extends StatefulWidget {
 
 class _ConsumptionSuspensionsAdminPageState
     extends State<ConsumptionSuspensionsAdminPage> {
-  static const String _accountingStartPeriodId = '2026-01';
 
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
@@ -63,10 +62,7 @@ class _ConsumptionSuspensionsAdminPageState
       _error = null;
     });
     try {
-      final periods = await _periodService.fetchPeriods();
-      final billablePeriods = periods
-          .where((item) => item.id.compareTo(_accountingStartPeriodId) >= 0)
-          .toList();
+      final periods = await _periodService.fetchOperationalPeriods();
       final selected = periods.isEmpty
           ? null
           : periods.firstWhere(
@@ -74,10 +70,10 @@ class _ConsumptionSuspensionsAdminPageState
               orElse: () => periods.first,
             );
       setState(() {
-        _periods = billablePeriods;
-        _selectedPeriod = billablePeriods.contains(selected)
+        _periods = periods;
+        _selectedPeriod = periods.contains(selected)
             ? selected
-            : (billablePeriods.isEmpty ? null : billablePeriods.first);
+            : (periods.isEmpty ? null : periods.first);
       });
       if (_selectedPeriod != null) {
         await _loadInvoices(_selectedPeriod!);
