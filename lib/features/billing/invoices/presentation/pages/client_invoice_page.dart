@@ -28,7 +28,7 @@ class _ClientInvoicePageState extends State<ClientInvoicePage> {
 
   bool _loading = true;
   String? _error;
-  Invoice? _invoice;
+  List<Invoice> _invoices = const [];
 
   @override
   void initState() {
@@ -42,10 +42,11 @@ class _ClientInvoicePageState extends State<ClientInvoicePage> {
       _error = null;
     });
     try {
-      final invoice = await _invoiceService.fetchLatestPayableInvoiceForClient(
-        widget.currentUser.codigoUsuario,
-      );
-      setState(() => _invoice = invoice);
+      final invoices = await _invoiceService
+          .fetchLatestPayableInvoicesForClientCodes(
+            widget.currentUser.codigosUsuario.map((item) => item.codigoUsuario),
+          );
+      setState(() => _invoices = invoices);
     } catch (error) {
       setState(() => _error = '$error');
     } finally {
@@ -55,11 +56,7 @@ class _ClientInvoicePageState extends State<ClientInvoicePage> {
     }
   }
 
-  Future<void> _printInvoice() async {
-    final invoice = _invoice;
-    if (invoice == null) {
-      return;
-    }
+  Future<void> _printInvoice(Invoice invoice) async {
     try {
       await _printingService.printInvoice(invoice);
     } catch (error) {
@@ -82,15 +79,23 @@ class _ClientInvoicePageState extends State<ClientInvoicePage> {
       return Center(child: Text('No fue posible cargar tu recibo: $_error'));
     }
 
-    final invoice = _invoice;
-    if (invoice == null) {
+    if (_invoices.isEmpty) {
       return _EmptyClientInvoice(currentUser: widget.currentUser);
     }
 
     return SingleChildScrollView(
-      child: _ClientInvoiceCard(
-        invoice: invoice,
-        onPrint: _printInvoice,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final invoice in _invoices) ...[
+            _ClientInvoiceCard(
+              invoice: invoice,
+              onPrint: () => _printInvoice(invoice),
+            ),
+            if (invoice != _invoices.last) const SizedBox(height: 16),
+          ],
+        ],
       ),
     );
   }
@@ -131,48 +136,56 @@ class _EmptyClientInvoice extends StatelessWidget {
 }
 
 class _ClientInvoiceCard extends StatelessWidget {
-  const _ClientInvoiceCard({
-    required this.invoice,
-    required this.onPrint,
-  });
+  const _ClientInvoiceCard({required this.invoice, required this.onPrint});
 
   final Invoice invoice;
   final VoidCallback onPrint;
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 560;
     final status = invoice.estadoPeriodoAnterior?.trim().toLowerCase() ?? '';
     final title = (status == 'suspendido' || invoice.estaSuspendido)
         ? 'Servicio suspendido'
         : switch (status) {
-      'en_mora' => 'Recibo en mora',
-      _ => 'Recibo pendiente de pago',
-    };
+            'en_mora' => 'Recibo en mora',
+            _ => 'Recibo pendiente de pago',
+          };
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 16 : 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                title,
+                style: compact
+                    ? Theme.of(context).textTheme.titleLarge
+                    : Theme.of(context).textTheme.headlineMedium,
+              ),
+              OutlinedButton.icon(
               onPressed: onPrint,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                ),
               icon: const Icon(Icons.picture_as_pdf_rounded),
               label: const Text('PDF'),
+              ),
+            ],
             ),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           const Text(
             'ASOCIACIÓN DE USUARIOS DEL ACUEDUCTO DE LAS VEREDAS DE QUITASOL Y JAZMÍN · NIT 808.000.868-7',
           ),
@@ -181,14 +194,32 @@ class _ClientInvoiceCard extends StatelessWidget {
             spacing: 18,
             runSpacing: 10,
             children: [
-              _LabelValue(label: 'Usuario', value: toDisplayUserName(invoice.nombreUsuario)),
-              _LabelValue(label: 'Código usuario', value: invoice.codigoUsuario),
+              _LabelValue(
+                label: 'Usuario',
+                value: toDisplayUserName(invoice.nombreUsuario),
+              ),
+              _LabelValue(
+                label: 'Código usuario',
+                value: invoice.codigoUsuario,
+              ),
               _LabelValue(label: 'Contador', value: invoice.codigoContador),
               _LabelValue(label: 'Período', value: invoice.periodo),
-              _LabelValue(label: 'Generado', value: _formatDate(invoice.fechaGeneracion)),
-              _LabelValue(label: 'Vence', value: _formatDate(invoice.fechaVencimiento)),
-              _LabelValue(label: 'Lectura anterior', value: '${invoice.lecturaAnterior ?? 0}'),
-              _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
+              _LabelValue(
+                label: 'Generado',
+                value: _formatDate(invoice.fechaGeneracion),
+              ),
+              _LabelValue(
+                label: 'Vence',
+                value: _formatDate(invoice.fechaVencimiento),
+              ),
+              _LabelValue(
+                label: 'Lectura anterior',
+                value: '${invoice.lecturaAnterior ?? 0}',
+              ),
+              _LabelValue(
+                label: 'Lectura actual',
+                value: '${invoice.lecturaActual}',
+              ),
               _LabelValue(label: 'Consumo m³', value: '${invoice.consumoM3}'),
               if (invoice.saldoAnterior > 0)
                 _LabelValue(
@@ -201,36 +232,61 @@ class _ClientInvoiceCard extends StatelessWidget {
           ...invoice.lineas.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Expanded(child: Text(item.descripcion)),
-                  Text('${item.cantidad} x ${_formatCurrency(item.valorUnitario)}'),
-                  const SizedBox(width: 14),
-                  SizedBox(
-                    width: 100,
-                    child: Text(
-                      _formatCurrency(item.valorTotal),
-                      textAlign: TextAlign.right,
+              child: compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.descripcion),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${item.cantidad} x ${_formatCurrency(item.valorUnitario)} = ${_formatCurrency(item.valorTotal)}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: Text(item.descripcion)),
+                        Text(
+                          '${item.cantidad} x ${_formatCurrency(item.valorUnitario)}',
+                        ),
+                        const SizedBox(width: 14),
+                        SizedBox(
+                          width: 100,
+                          child: Text(
+                            _formatCurrency(item.valorTotal),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
           const Divider(height: 28),
           if (invoice.mediosPagoTexto.isNotEmpty) ...[
-            Text('Medios de pago', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Medios de pago',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 6),
             Text(invoice.mediosPagoTexto),
             const SizedBox(height: 16),
           ],
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(child: Text(invoice.mensaje ?? '')),
-              const SizedBox(width: 16),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: compact ? 320 : 520),
+                child: Text(invoice.mensaje ?? ''),
+              ),
               Text(
                 'Total a pagar: ${_formatCurrency(invoice.totalAPagar)}',
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: compact
+                    ? Theme.of(context).textTheme.titleLarge
+                    : Theme.of(context).textTheme.headlineSmall,
               ),
             ],
           ),
@@ -248,7 +304,11 @@ class _LabelValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: 220, child: Text('$label: $value'));
+    final compact = MediaQuery.sizeOf(context).width < 560;
+    return SizedBox(
+      width: compact ? double.infinity : 220,
+      child: Text('$label: $value'),
+    );
   }
 }
 

@@ -284,7 +284,7 @@ class _ObservationDialogState extends State<_ObservationDialog> {
   late String _type = widget.item?.tipo ?? 'masiva';
   late bool _always = widget.item?.siempre ?? false;
   BillingPeriod? _selectedPeriod;
-  AppUser? _selectedClient;
+  _ObservationClientChoice? _selectedClient;
 
   bool get _isEditing => widget.item != null;
   bool get _isMassive => _type == 'masiva';
@@ -296,10 +296,10 @@ class _ObservationDialogState extends State<_ObservationDialog> {
           (item) => item?.id == widget.item?.periodo,
           orElse: () => null,
         );
-    _selectedClient = widget.clients.cast<AppUser?>().firstWhere(
-          (item) => item?.codigoUsuario == widget.item?.codigoUsuario,
-          orElse: () => null,
-        );
+    _selectedClient = _clientChoices.cast<_ObservationClientChoice?>().firstWhere(
+      (item) => item?.codigoUsuario == widget.item?.codigoUsuario,
+      orElse: () => null,
+    );
   }
 
   @override
@@ -374,13 +374,13 @@ class _ObservationDialogState extends State<_ObservationDialog> {
                       onChanged: (value) => setState(() => _always = value),
                     ),
                   if (!_isMassive) ...[
-                    DropdownButtonFormField<AppUser>(
+                    DropdownButtonFormField<_ObservationClientChoice>(
                       isExpanded: true,
                       initialValue: _selectedClient,
                       decoration: const InputDecoration(
                         labelText: 'Usuario',
                       ),
-                      items: widget.clients
+                      items: _clientChoices
                           .map(
                             (item) => DropdownMenuItem(
                               value: item,
@@ -492,6 +492,37 @@ class _ObservationDialogState extends State<_ObservationDialog> {
 
     Navigator.of(context).pop(item);
   }
+
+  List<_ObservationClientChoice> get _clientChoices {
+    return [
+      for (final client in widget.clients)
+        for (final code in client.codigosUsuario)
+          if (code.codigoUsuario.trim().isNotEmpty)
+            _ObservationClientChoice(
+              nombre: client.nombre,
+              codigoUsuario: code.codigoUsuario.trim().toUpperCase(),
+            ),
+    ];
+  }
+}
+
+class _ObservationClientChoice {
+  const _ObservationClientChoice({
+    required this.nombre,
+    required this.codigoUsuario,
+  });
+
+  final String nombre;
+  final String codigoUsuario;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ObservationClientChoice &&
+        other.codigoUsuario == codigoUsuario;
+  }
+
+  @override
+  int get hashCode => codigoUsuario.hashCode;
 }
 
 class _ObservationCard extends StatelessWidget {

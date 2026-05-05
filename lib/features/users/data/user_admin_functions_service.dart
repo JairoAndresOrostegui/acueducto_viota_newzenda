@@ -4,7 +4,7 @@ import '../domain/app_user.dart';
 
 class UserAdminFunctionsService {
   UserAdminFunctionsService({FirebaseFunctions? functions})
-      : _functions = functions;
+    : _functions = functions;
 
   final FirebaseFunctions? _functions;
 
@@ -22,6 +22,9 @@ class UserAdminFunctionsService {
       'numeroContacto': user.numeroContacto,
       'codigoUsuario': user.codigoUsuario,
       'numeroContador': user.numeroContador,
+      'codigosUsuario': user.codigosUsuario
+          .map((item) => item.toMap())
+          .toList(),
       'rol': user.rol,
       'tipoCliente': user.tipoCliente,
       'sector': user.sector,
@@ -45,6 +48,9 @@ class UserAdminFunctionsService {
       'numeroContacto': user.numeroContacto,
       'codigoUsuario': user.codigoUsuario,
       'numeroContador': user.numeroContador,
+      'codigosUsuario': user.codigosUsuario
+          .map((item) => item.toMap())
+          .toList(),
       'rol': user.rol,
       'tipoCliente': user.tipoCliente,
       'sector': user.sector,
@@ -64,6 +70,18 @@ class UserAdminFunctionsService {
   ) async {
     final callable = _client.httpsCallable(
       'importMigratedUsers',
+      options: HttpsCallableOptions(timeout: const Duration(minutes: 30)),
+    );
+    final result = await callable.call({'rows': rows});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return UserImportSummary.fromMap(data);
+  }
+
+  Future<UserImportSummary> mergeClientUsersByDocument(
+    List<Map<String, String>> rows,
+  ) async {
+    final callable = _client.httpsCallable(
+      'mergeClientUsersByDocument',
       options: HttpsCallableOptions(timeout: const Duration(minutes: 30)),
     );
     final result = await callable.call({'rows': rows});

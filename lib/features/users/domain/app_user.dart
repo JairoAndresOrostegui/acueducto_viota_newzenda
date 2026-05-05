@@ -9,6 +9,7 @@ class AppUser {
     required this.numeroContacto,
     required this.codigoUsuario,
     required this.numeroContador,
+    required this.codigosUsuario,
     required this.rol,
     required this.tipoCliente,
     required this.sector,
@@ -26,6 +27,7 @@ class AppUser {
   final String numeroContacto;
   final String codigoUsuario;
   final List<String> numeroContador;
+  final List<ClientUserCode> codigosUsuario;
   final String rol;
   final String tipoCliente;
   final String sector;
@@ -54,6 +56,7 @@ class AppUser {
     String? numeroContacto,
     String? codigoUsuario,
     List<String>? numeroContador,
+    List<ClientUserCode>? codigosUsuario,
     String? rol,
     String? tipoCliente,
     String? sector,
@@ -71,6 +74,7 @@ class AppUser {
       numeroContacto: numeroContacto ?? this.numeroContacto,
       codigoUsuario: codigoUsuario ?? this.codigoUsuario,
       numeroContador: numeroContador ?? this.numeroContador,
+      codigosUsuario: codigosUsuario ?? this.codigosUsuario,
       rol: rol ?? this.rol,
       tipoCliente: tipoCliente ?? this.tipoCliente,
       sector: sector ?? this.sector,
@@ -95,6 +99,7 @@ class AppUser {
       numeroContacto: data['numeroContacto'] as String? ?? '',
       codigoUsuario: data['codigoUsuario'] as String? ?? '',
       numeroContador: _toMeterList(data['numeroContador']),
+      codigosUsuario: _toClientCodes(data),
       rol: data['rol'] as String? ?? '',
       tipoCliente: data['tipoCliente'] as String? ?? 'na',
       sector: data['sector'] as String? ?? '',
@@ -125,6 +130,12 @@ class AppUser {
       'numeroContacto': numeroContacto,
       'codigoUsuario': codigoUsuario,
       'numeroContador': numeroContador,
+      'codigosUsuario': codigosUsuario.map((item) => item.toMap()).toList(),
+      'codigosUsuarioValores': codigosUsuario
+          .map((item) => item.codigoUsuario)
+          .where((item) => item.isNotEmpty && item.toLowerCase() != 'na')
+          .toSet()
+          .toList(),
       'rol': rol,
       'tipoCliente': tipoCliente,
       'sector': sector,
@@ -157,5 +168,72 @@ class AppUser {
       return [normalized];
     }
     return const [];
+  }
+
+  static List<ClientUserCode> _toClientCodes(Map<String, dynamic> data) {
+    final rawCodes = data['codigosUsuario'];
+    if (rawCodes is List) {
+      final codes = rawCodes
+          .whereType<Map>()
+          .map(
+            (item) => ClientUserCode.fromMap(Map<String, dynamic>.from(item)),
+          )
+          .where((item) => item.isValid)
+          .toList();
+      if (codes.isNotEmpty) {
+        return codes;
+      }
+    }
+
+    final legacyCode = data['codigoUsuario'] as String? ?? '';
+    final legacyMeters = _toMeterList(data['numeroContador']);
+    if (legacyCode.trim().isEmpty ||
+        legacyCode.trim().toLowerCase() == 'na' ||
+        legacyMeters.isEmpty) {
+      return const [];
+    }
+    return [
+      ClientUserCode(
+        codigoUsuario: legacyCode.trim().toUpperCase(),
+        numeroContador: legacyMeters.first.trim().toUpperCase(),
+        sector: data['sector'] as String? ?? '',
+      ),
+    ];
+  }
+}
+
+class ClientUserCode {
+  const ClientUserCode({
+    required this.codigoUsuario,
+    required this.numeroContador,
+    required this.sector,
+  });
+
+  final String codigoUsuario;
+  final String numeroContador;
+  final String sector;
+
+  bool get isValid =>
+      codigoUsuario.trim().isNotEmpty &&
+      codigoUsuario.trim().toLowerCase() != 'na' &&
+      numeroContador.trim().isNotEmpty &&
+      numeroContador.trim().toLowerCase() != 'na' &&
+      sector.trim().isNotEmpty &&
+      sector.trim().toLowerCase() != 'na';
+
+  Map<String, dynamic> toMap() {
+    return {
+      'codigoUsuario': codigoUsuario.trim().toUpperCase(),
+      'numeroContador': numeroContador.trim().toUpperCase(),
+      'sector': sector.trim().toLowerCase(),
+    };
+  }
+
+  factory ClientUserCode.fromMap(Map<String, dynamic> data) {
+    return ClientUserCode(
+      codigoUsuario: data['codigoUsuario'] as String? ?? '',
+      numeroContador: data['numeroContador'] as String? ?? '',
+      sector: data['sector'] as String? ?? '',
+    );
   }
 }

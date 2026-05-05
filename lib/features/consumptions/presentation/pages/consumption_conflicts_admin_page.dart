@@ -62,7 +62,9 @@ class _ConsumptionConflictsAdminPageState
               Expanded(
                 child: _items.isEmpty
                     ? const Center(
-                        child: Text('No hay conflictos pendientes en consumos.'),
+                        child: Text(
+                          'No hay conflictos pendientes en consumos.',
+                        ),
                       )
                     : ListView.separated(
                         itemCount: _items.length,
@@ -102,8 +104,9 @@ class _ConsumptionConflictsAdminPageState
       final users = results[1] as List<AppUser>;
       final sectorsByUserCode = {
         for (final user in users)
-          if (user.codigoUsuario.trim().isNotEmpty)
-            user.codigoUsuario.trim().toUpperCase(): user.sector,
+          for (final code in user.codigosUsuario)
+            if (code.codigoUsuario.trim().isNotEmpty)
+              code.codigoUsuario.trim().toUpperCase(): code.sector,
       };
       if (!mounted) {
         return;
@@ -124,8 +127,9 @@ class _ConsumptionConflictsAdminPageState
     if (fromReading.isNotEmpty) {
       return fromReading;
     }
-    return _sectorsByUserCode[
-            item.lecturaPropuesta.codigoUsuario.trim().toUpperCase()] ??
+    return _sectorsByUserCode[item.lecturaPropuesta.codigoUsuario
+            .trim()
+            .toUpperCase()] ??
         '';
   }
 
@@ -162,7 +166,8 @@ class _ConsumptionConflictsAdminPageState
           actorRol: widget.currentUser.rol,
           fecha: DateTime.now(),
           estadoAnterior:
-              conflict.lecturaExistente?.estado ?? conflict.lecturaPropuesta.estado,
+              conflict.lecturaExistente?.estado ??
+              conflict.lecturaPropuesta.estado,
           estadoNuevo: result.finalReading.estado,
           valorAnterior: conflict.lecturaExistente?.lecturaActual,
           valorNuevo: result.finalReading.lecturaActual,
@@ -227,10 +232,7 @@ String _displaySector(String value) {
 }
 
 class _ConflictsHeader extends StatelessWidget {
-  const _ConflictsHeader({
-    required this.pendingCount,
-    required this.onRefresh,
-  });
+  const _ConflictsHeader({required this.pendingCount, required this.onRefresh});
 
   final int pendingCount;
   final Future<void> Function() onRefresh;
@@ -326,9 +328,9 @@ class _ConflictCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             item.mensaje,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.orange.shade900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.orange.shade900),
           ),
           const SizedBox(height: 12),
           Align(
@@ -442,7 +444,9 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
                       controller: _manualValueController,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Valor final'),
+                      decoration: const InputDecoration(
+                        labelText: 'Valor final',
+                      ),
                       validator: (value) {
                         if (_selection != 'manual') {
                           return null;
@@ -452,7 +456,8 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
                           return 'Ingresa un valor válido.';
                         }
                         final previous = widget.conflict.lecturaAnterior;
-                        if (previous != null && parsed < previous.lecturaActual) {
+                        if (previous != null &&
+                            parsed < previous.lecturaActual) {
                           return 'No puede ser menor que ${previous.lecturaActual}.';
                         }
                         return null;
@@ -531,7 +536,8 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
       return;
     }
     final previous = widget.conflict.lecturaAnterior;
-    if (previous != null && finalReading.lecturaActual < previous.lecturaActual) {
+    if (previous != null &&
+        finalReading.lecturaActual < previous.lecturaActual) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -562,8 +568,9 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
         }
         return existing.copyWith(
           lecturaAnterior: previousValue,
-          consumoCalculado:
-              previousValue == null ? null : existing.lecturaActual - previousValue,
+          consumoCalculado: previousValue == null
+              ? null
+              : existing.lecturaActual - previousValue,
           estado: 'editado_admin',
           conflictoId: null,
           detalleEstado: null,
@@ -578,7 +585,9 @@ class _ResolveConflictDialogState extends State<_ResolveConflictDialog> {
         return widget.conflict.lecturaPropuesta.copyWith(
           lecturaActual: value,
           lecturaAnterior: previousValue,
-          consumoCalculado: previousValue == null ? null : value - previousValue,
+          consumoCalculado: previousValue == null
+              ? null
+              : value - previousValue,
           fecha: DateTime.now(),
           nombreOperario: widget.currentUser.nombre,
           actorUid: widget.currentUser.uid,

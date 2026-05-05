@@ -15,8 +15,7 @@ class UserPageResult {
 }
 
 class UserFirestoreService {
-  UserFirestoreService({FirebaseFirestore? firestore})
-      : _firestore = firestore;
+  UserFirestoreService({FirebaseFirestore? firestore}) : _firestore = firestore;
 
   final FirebaseFirestore? _firestore;
 
@@ -24,7 +23,10 @@ class UserFirestoreService {
       (_firestore ?? FirebaseFirestore.instance).collection('usuarios');
 
   Future<List<AppUser>> fetchUsers({int limit = 200}) async {
-    final snapshot = await _usersCollection.orderBy('nombre').limit(limit).get();
+    final snapshot = await _usersCollection
+        .orderBy('nombre')
+        .limit(limit)
+        .get();
     return snapshot.docs.map(AppUser.fromFirestore).toList();
   }
 
@@ -76,10 +78,7 @@ class UserFirestoreService {
         .get();
     final users = snapshot.docs.map(AppUser.fromFirestore).toList()
       ..sort((a, b) => a.nombre.compareTo(b.nombre));
-    return users
-        .where((user) => user.codigoUsuario != 'na')
-        .where((user) => user.numeroContador.isNotEmpty)
-        .toList();
+    return users.where((user) => user.codigosUsuario.isNotEmpty).toList();
   }
 
   Future<AppUser?> getUser(String uid) async {

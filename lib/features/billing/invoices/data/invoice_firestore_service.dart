@@ -39,8 +39,9 @@ class InvoiceFirestoreService {
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> _periodConsumptions(String period) =>
-      _db.collection('periodos').doc(period).collection('consumos');
+  CollectionReference<Map<String, dynamic>> _periodConsumptions(
+    String period,
+  ) => _db.collection('periodos').doc(period).collection('consumos');
 
   CollectionReference<Map<String, dynamic>> _periodInvoices(String period) =>
       _db.collection('periodos').doc(period).collection('recibos');
@@ -50,37 +51,78 @@ class InvoiceFirestoreService {
       return const [];
     }
     final snapshot = await _periodInvoices(period).get();
-    final items = snapshot.docs
-        .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
-        .toList()
-      ..sort((a, b) {
-        final userCompare = a.codigoUsuario.compareTo(b.codigoUsuario);
-        if (userCompare != 0) {
-          return userCompare;
-        }
-        return a.codigoContador.compareTo(b.codigoContador);
-      });
+    final items =
+        snapshot.docs
+            .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
+            .toList()
+          ..sort((a, b) {
+            final userCompare = a.codigoUsuario.compareTo(b.codigoUsuario);
+            if (userCompare != 0) {
+              return userCompare;
+            }
+            return a.codigoContador.compareTo(b.codigoContador);
+          });
     return items;
   }
 
-  Future<Invoice?> fetchLatestPayableInvoiceForClient(String customerCode) async {
+  Future<Invoice?> fetchLatestPayableInvoiceForClient(
+    String customerCode,
+  ) async {
     final snapshot = await _db
         .collectionGroup('recibos')
         .where('codigoUsuario', isEqualTo: customerCode)
         .where('pagado', isEqualTo: false)
         .get();
-    final items = snapshot.docs
-        .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
-        .where((item) => _isAccountingPeriodId(item.periodo))
-        .toList()
-      ..sort((a, b) {
-        final periodCompare = b.periodo.compareTo(a.periodo);
-        if (periodCompare != 0) {
-          return periodCompare;
-        }
-        return b.fechaGeneracion.compareTo(a.fechaGeneracion);
-      });
+    final items =
+        snapshot.docs
+            .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
+            .where((item) => _isAccountingPeriodId(item.periodo))
+            .toList()
+          ..sort((a, b) {
+            final periodCompare = b.periodo.compareTo(a.periodo);
+            if (periodCompare != 0) {
+              return periodCompare;
+            }
+            return b.fechaGeneracion.compareTo(a.fechaGeneracion);
+          });
     return items.isEmpty ? null : items.first;
+  }
+
+  Future<Invoice?> fetchLatestPayableInvoiceForClientCodes(
+    Iterable<String> customerCodes,
+  ) async {
+    final invoices = await fetchLatestPayableInvoicesForClientCodes(
+      customerCodes,
+    );
+    return invoices.isEmpty ? null : invoices.first;
+  }
+
+  Future<List<Invoice>> fetchLatestPayableInvoicesForClientCodes(
+    Iterable<String> customerCodes,
+  ) async {
+    final codes = customerCodes
+        .map((item) => item.trim().toUpperCase())
+        .where((item) => item.isNotEmpty && item != 'NA')
+        .toSet()
+        .toList();
+    if (codes.isEmpty) {
+      return const [];
+    }
+    final invoices = <Invoice>[];
+    for (final code in codes) {
+      final invoice = await fetchLatestPayableInvoiceForClient(code);
+      if (invoice != null) {
+        invoices.add(invoice);
+      }
+    }
+    invoices.sort((a, b) {
+      final periodCompare = b.periodo.compareTo(a.periodo);
+      if (periodCompare != 0) {
+        return periodCompare;
+      }
+      return b.fechaGeneracion.compareTo(a.fechaGeneracion);
+    });
+    return invoices;
   }
 
   Future<List<Invoice>> fetchPendingInvoicesReport({
@@ -109,17 +151,18 @@ class InvoiceFirestoreService {
       query = query.where('codigoUsuario', isEqualTo: normalizedCustomer);
     }
     final snapshot = await query.get();
-    final items = snapshot.docs
-        .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
-        .where((item) => _isAccountingPeriodId(item.periodo))
-        .toList()
-      ..sort((a, b) {
-        final periodCompare = a.periodo.compareTo(b.periodo);
-        if (periodCompare != 0) {
-          return periodCompare;
-        }
-        return a.codigoUsuario.compareTo(b.codigoUsuario);
-      });
+    final items =
+        snapshot.docs
+            .map((doc) => Invoice.fromFirestore(doc.id, doc.data()))
+            .where((item) => _isAccountingPeriodId(item.periodo))
+            .toList()
+          ..sort((a, b) {
+            final periodCompare = a.periodo.compareTo(b.periodo);
+            if (periodCompare != 0) {
+              return periodCompare;
+            }
+            return a.codigoUsuario.compareTo(b.codigoUsuario);
+          });
     return items;
   }
 
@@ -157,7 +200,9 @@ class InvoiceFirestoreService {
         generatedAt: now,
         dueDate: dueDate,
         previousInvoice: previousInvoicesByMeter[reading.codigoContador],
-        sector: usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
+        sector:
+            usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
+            '',
         appliedObservations: _resolveAppliedObservations(
           observations,
           periodId: period.id,
@@ -201,10 +246,9 @@ class InvoiceFirestoreService {
       fechaPago: paid ? DateTime.now() : null,
       medioPagoId: paid ? paymentMethod?.id : null,
       medioPagoDescripcion: paid ? paymentMethod?.descripcion : null,
-      observacionesPago:
-          paid && (observations?.trim().isNotEmpty ?? false)
-              ? observations!.trim()
-              : null,
+      observacionesPago: paid && (observations?.trim().isNotEmpty ?? false)
+          ? observations!.trim()
+          : null,
     );
 
     final batch = _db.batch();
@@ -223,10 +267,9 @@ class InvoiceFirestoreService {
         'fechaPago': paid ? Timestamp.fromDate(updated.fechaPago!) : null,
         'medioPagoId': paid ? paymentMethod?.id : null,
         'medioPagoDescripcion': paid ? paymentMethod?.descripcion : null,
-        'observacionesPago':
-            paid && (observations?.trim().isNotEmpty ?? false)
-                ? observations!.trim()
-                : null,
+        'observacionesPago': paid && (observations?.trim().isNotEmpty ?? false)
+            ? observations!.trim()
+            : null,
       },
       SetOptions(merge: true),
     );
@@ -351,7 +394,9 @@ class InvoiceFirestoreService {
         generatedAt: now,
         dueDate: dueDate,
         previousInvoice: previousInvoicesByMeter[reading.codigoContador],
-        sector: usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
+        sector:
+            usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
+            '',
         appliedObservations: _resolveAppliedObservations(
           observations,
           periodId: period.id,
@@ -390,8 +435,9 @@ class InvoiceFirestoreService {
       throw StateError('No se puede regenerar un recibo pagado.');
     }
 
-    final readingSnapshot =
-        await _periodConsumptions(period.id).doc(existing.codigoContador).get();
+    final readingSnapshot = await _periodConsumptions(
+      period.id,
+    ).doc(existing.codigoContador).get();
     if (!readingSnapshot.exists || readingSnapshot.data() == null) {
       throw StateError('No se encontro la lectura asociada al recibo.');
     }
@@ -418,7 +464,8 @@ class InvoiceFirestoreService {
       generatedAt: now,
       dueDate: dueDate,
       previousInvoice: previousInvoicesByMeter[reading.codigoContador],
-      sector: usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
+      sector:
+          usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
       appliedObservations: _resolveAppliedObservations(
         observations,
         periodId: period.id,
@@ -428,9 +475,9 @@ class InvoiceFirestoreService {
       existingInvoice: existing,
     );
 
-    await _periodInvoices(period.id)
-        .doc(invoice.id)
-        .set(invoice.toFirestore(), SetOptions(merge: true));
+    await _periodInvoices(
+      period.id,
+    ).doc(invoice.id).set(invoice.toFirestore(), SetOptions(merge: true));
   }
 
   Invoice _buildInvoice({
@@ -448,7 +495,8 @@ class InvoiceFirestoreService {
     Invoice? existingInvoice,
   }) {
     final previousReading = reading.lecturaAnterior ?? 0;
-    final consumption = reading.consumoCalculado ??
+    final consumption =
+        reading.consumoCalculado ??
         (reading.lecturaActual - previousReading).clamp(0, 1 << 31).toInt();
     final lineItems = <InvoiceLineItem>[
       InvoiceLineItem(
@@ -530,8 +578,11 @@ class InvoiceFirestoreService {
     final users = await _userService.fetchUsers(limit: 5000);
     return {
       for (final user in users)
-        if (_normalizeUserCode(user.codigoUsuario).isNotEmpty)
-          _normalizeUserCode(user.codigoUsuario): user,
+        for (final code in user.codigosUsuario)
+          if (_normalizeUserCode(code.codigoUsuario).isNotEmpty)
+            _normalizeUserCode(code.codigoUsuario): user.copyWith(
+              sector: code.sector,
+            ),
     };
   }
 
@@ -605,15 +656,16 @@ class InvoiceFirestoreService {
     String currentPeriodId,
   ) async {
     final snapshot = await _db.collection('periodos').get();
-    final ids = snapshot.docs
-        .map((doc) => doc.id)
-        .where(
-          (periodId) =>
-              _isAccountingPeriodId(periodId) &&
-              periodId.compareTo(currentPeriodId) < 0,
-        )
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    final ids =
+        snapshot.docs
+            .map((doc) => doc.id)
+            .where(
+              (periodId) =>
+                  _isAccountingPeriodId(periodId) &&
+                  periodId.compareTo(currentPeriodId) < 0,
+            )
+            .toList()
+          ..sort((a, b) => b.compareTo(a));
     return ids;
   }
 
@@ -716,8 +768,8 @@ class InvoiceFirestoreService {
       final description = end == null
           ? 'Consumo superior a ${start - 1} m3'
           : start == 0
-              ? 'Consumo hasta $end m3'
-              : 'Consumo entre $start y $end m3';
+          ? 'Consumo hasta $end m3'
+          : 'Consumo entre $start y $end m3';
       items.add(
         InvoiceLineItem(
           descripcion: description,
@@ -740,10 +792,7 @@ class InvoiceFirestoreService {
           (item) =>
               item.concepto.trim().isNotEmpty &&
               item.valor > 0 &&
-              item.appliesTo(
-                periodId: periodId,
-                userCode: codigoUsuario,
-              ),
+              item.appliesTo(periodId: periodId, userCode: codigoUsuario),
         )
         .map(
           (item) => InvoiceLineItem(

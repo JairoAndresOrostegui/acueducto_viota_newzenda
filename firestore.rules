@@ -53,7 +53,9 @@ service cloud.firestore {
           exists(currentUserPath()) &&
           currentUserData().rol == 'cliente' &&
           currentUserData().estado == 'activo' &&
-          currentUserData().codigoUsuario == code;
+          (currentUserData().codigoUsuario == code ||
+              (currentUserData().keys().hasAny(['codigosUsuarioValores']) &&
+                  code in currentUserData().codigosUsuarioValores));
     }
 
     function isPaymentStatusUpdate() {

@@ -216,14 +216,29 @@ async function ensureUniqueDocumentNumber(uid, numeroDocumento) {
 }
 
 async function ensureUniqueClientIdentifiers(uid, codigoUsuario, numeroContador) {
-  if (codigoUsuario && codigoUsuario !== 'na') {
+  const pairs = Array.isArray(codigoUsuario)
+    ? codigoUsuario
+    : [{ codigoUsuario, numeroContador: null }];
+  const codes = pairs
+    .map((pair) => pair.codigoUsuario)
+    .filter((code) => code && code !== 'na');
+  const meters = Array.isArray(codigoUsuario)
+    ? pairs.map((pair) => pair.numeroContador).filter((meter) => meter)
+    : numeroContador;
+
+  for (const code of codes) {
     const codeSnapshot = await db
       .collection(USER_COLLECTION)
-      .where('codigoUsuario', '==', codigoUsuario)
+      .where('codigosUsuarioValores', 'array-contains', code)
+      .limit(5)
+      .get();
+    const legacyCodeSnapshot = await db
+      .collection(USER_COLLECTION)
+      .where('codigoUsuario', '==', code)
       .limit(5)
       .get();
 
-    for (const doc of codeSnapshot.docs) {
+    for (const doc of [...codeSnapshot.docs, ...legacyCodeSnapshot.docs]) {
       if (doc.id !== uid) {
         throw new HttpsError(
         'already-exists',
@@ -233,7 +248,7 @@ async function ensureUniqueClientIdentifiers(uid, codigoUsuario, numeroContador)
     }
   }
 
-  for (const contador of numeroContador) {
+  for (const contador of meters) {
     const meterSnapshot = await db
       .collection(USER_COLLECTION)
       .where('numeroContador', 'array-contains', contador)
@@ -252,11 +267,19 @@ async function ensureUniqueClientIdentifiers(uid, codigoUsuario, numeroContador)
 }
 
 async function findUserByClientCode(codigoUsuario) {
-  const snapshot = await db
+  let snapshot = await db
     .collection(USER_COLLECTION)
-    .where('codigoUsuario', '==', codigoUsuario)
+    .where('codigosUsuarioValores', 'array-contains', codigoUsuario)
     .limit(2)
     .get();
+
+  if (snapshot.empty) {
+    snapshot = await db
+      .collection(USER_COLLECTION)
+      .where('codigoUsuario', '==', codigoUsuario)
+      .limit(2)
+      .get();
+  }
 
   if (snapshot.empty) {
     throw new HttpsError(
@@ -351,11 +374,19 @@ async function upsertAuthUser(uid, authPayload) {
 }
 
 async function findClientByCode(codigoUsuario) {
-  const snapshot = await db
+  let snapshot = await db
     .collection(USER_COLLECTION)
-    .where('codigoUsuario', '==', codigoUsuario)
+    .where('codigosUsuarioValores', 'array-contains', codigoUsuario)
     .limit(2)
     .get();
+
+  if (snapshot.empty) {
+    snapshot = await db
+      .collection(USER_COLLECTION)
+      .where('codigoUsuario', '==', codigoUsuario)
+      .limit(2)
+      .get();
+  }
 
   if (snapshot.empty) {
     throw new HttpsError('not-found', 'No existe cliente con ese codigo.');
@@ -371,6 +402,33 @@ async function findClientByCode(codigoUsuario) {
   if (data.rol !== 'cliente') {
     throw new HttpsError('failed-precondition', 'El codigo no pertenece a un cliente.');
   }
+  const codePair = Array.isArray(data.codigosUsuario)
+    ? data.codigosUsuario
+        .find((item) => item?.codigoUsuario === codigoUsuario && item?.numeroContador)
+    : null;
+  if (codePair) {
+    const meterCode = codePair.numeroContador.trim().toUpperCase();
+    const sector = typeof codePair.sector === 'string' ? codePair.sector : data.sector;
+    return {
+      uid: doc.id,
+      data,
+      meterCode,
+      sector,
+    };
+  }
+  const codePairs = Array.isArray(data.codigosUsuario)
+    ? data.codigosUsuario
+        .filter((item) => item?.codigoUsuario === codigoUsuario && item?.numeroContador)
+        .map((item) => item.numeroContador.trim().toUpperCase())
+    : [];
+  if (codePairs.length === 1) {
+    return {
+      uid: doc.id,
+      data,
+      meterCode: codePairs[0],
+      sector: data.sector ?? '',
+    };
+  }
   const meters = Array.isArray(data.numeroContador)
     ? data.numeroContador.filter((item) => typeof item === 'string' && item.trim())
     : [];
@@ -384,6 +442,7 @@ async function findClientByCode(codigoUsuario) {
     uid: doc.id,
     data,
     meterCode: meters[0].trim().toUpperCase(),
+    sector: data.sector ?? '',
   };
 }
 
@@ -418,6 +477,8 @@ function sanitizeUserPayload(data) {
     numeroContacto: data.numeroContacto,
     codigoUsuario: data.codigoUsuario,
     numeroContador: data.numeroContador,
+    codigosUsuario: data.codigosUsuario,
+    codigosUsuarioValores: data.codigosUsuarioValores,
     rol: data.rol,
     tipoCliente: data.tipoCliente,
     sector: data.sector,
@@ -513,6 +574,70 @@ function normalizeOptionalCounterList(value, field, allowEmptyFields) {
   return normalizeSingleCounter(normalized, field);
 }
 
+async function normalizeClientCodePairs(data, allowEmptyFields) {
+  const rawPairs = Array.isArray(data.codigosUsuario) ? data.codigosUsuario : [];
+  const sourcePairs = rawPairs.length > 0
+    ? rawPairs
+    : [{ codigoUsuario: data.codigoUsuario, numeroContador: Array.isArray(data.numeroContador) ? data.numeroContador[0] : data.numeroContador }];
+
+  const result = [];
+  const seenCodes = new Set();
+  const seenMeters = new Set();
+
+  for (const pair of sourcePairs) {
+    const code = normalizeOptionalClientCode(
+      pair?.codigoUsuario,
+      'codigoUsuario',
+      allowEmptyFields,
+    );
+    const meterList = normalizeOptionalCounterList(
+      [pair?.numeroContador],
+      'numeroContador',
+      allowEmptyFields,
+    );
+    const normalizedSector = normalizeOptionalLowercase(pair?.sector ?? data.sector);
+    const meter = meterList[0] ?? '';
+    if (code === 'na' && !meter && (!normalizedSector || normalizedSector === 'na')) {
+      continue;
+    }
+    if (code === 'na' || !meter || !normalizedSector || normalizedSector === 'na') {
+      if (allowEmptyFields) {
+        continue;
+      }
+      throw new HttpsError(
+        'invalid-argument',
+        'Cada codigo de usuario debe tener contador y sector.',
+      );
+    }
+    const sector = await getActiveCatalogValue(
+      SECTOR_COLLECTION,
+      normalizedSector,
+      'sector',
+    );
+    if (seenCodes.has(code)) {
+      throw new HttpsError('already-exists', 'Hay codigos de usuario repetidos.');
+    }
+    if (seenMeters.has(meter)) {
+      throw new HttpsError('already-exists', 'Hay contadores repetidos.');
+    }
+    seenCodes.add(code);
+    seenMeters.add(meter);
+    result.push({
+      codigoUsuario: code,
+      numeroContador: meter,
+      sector: sector.valor,
+    });
+  }
+
+  if (result.length === 0 && !allowEmptyFields) {
+    throw new HttpsError(
+      'invalid-argument',
+      'El cliente debe tener al menos un codigo de usuario con contador.',
+    );
+  }
+  return result;
+}
+
 async function buildUserPayload(uid, data, previous = null, options = {}) {
   const allowEmptyFields = options.allowEmptyFields === true;
   const documentType = await getActiveCatalogValue(
@@ -542,6 +667,8 @@ async function buildUserPayload(uid, data, previous = null, options = {}) {
     ),
     codigoUsuario: 'na',
     numeroContador: [],
+    codigosUsuario: [],
+    codigosUsuarioValores: [],
     rol: role.valor,
     tipoCliente: 'na',
     sector: 'na',
@@ -582,17 +709,11 @@ async function buildUserPayload(uid, data, previous = null, options = {}) {
       );
       payload.sector = sector.valor;
     }
-    payload.codigoUsuario = normalizeOptionalClientCode(
-      data.codigoUsuario,
-      'codigoUsuario',
-      allowEmptyFields,
-    );
-    payload.numeroContador = normalizeOptionalCounterList(
-      data.numeroContador,
-      'numeroContador',
-      allowEmptyFields,
-    );
-    await ensureUniqueClientIdentifiers(uid, payload.codigoUsuario, payload.numeroContador);
+    payload.codigosUsuario = await normalizeClientCodePairs(data, allowEmptyFields);
+    payload.codigosUsuarioValores = payload.codigosUsuario.map((item) => item.codigoUsuario);
+    payload.codigoUsuario = payload.codigosUsuario[0]?.codigoUsuario ?? 'na';
+    payload.numeroContador = payload.codigosUsuario.map((item) => item.numeroContador);
+    await ensureUniqueClientIdentifiers(uid, payload.codigosUsuario);
   }
 
   return payload;
@@ -915,11 +1036,18 @@ exports.importMigratedUsers = onCall(
 
   for (const row of normalizedRows) {
     try {
-      const existingByCode = await db
+      let existingByCode = await db
         .collection(USER_COLLECTION)
-        .where('codigoUsuario', '==', row.codigoUsuario)
+        .where('codigosUsuarioValores', 'array-contains', row.codigoUsuario)
         .limit(1)
         .get();
+      if (existingByCode.empty) {
+        existingByCode = await db
+          .collection(USER_COLLECTION)
+          .where('codigoUsuario', '==', row.codigoUsuario)
+          .limit(1)
+          .get();
+      }
       const targetRef = existingByCode.empty
         ? db.collection(USER_COLLECTION).doc()
         : existingByCode.docs[0].ref;
@@ -938,6 +1066,14 @@ exports.importMigratedUsers = onCall(
         numeroContacto: row.numeroContacto,
         codigoUsuario: row.codigoUsuario,
         numeroContador: [row.numeroContador],
+        codigosUsuario: [
+          {
+            codigoUsuario: row.codigoUsuario,
+            numeroContador: row.numeroContador,
+            sector: row.sector,
+          },
+        ],
+        codigosUsuarioValores: [row.codigoUsuario],
         rol: 'cliente',
         tipoCliente: row.tipoCliente,
         sector: row.sector,
@@ -980,6 +1116,219 @@ exports.importMigratedUsers = onCall(
 
   return { imported, failed, results };
 });
+
+exports.mergeClientUsersByDocument = onCall(
+  { cors: true, invoker: 'public', timeoutSeconds: 1800, memory: '1GiB' },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Debes iniciar sesion.');
+    }
+
+    const actor = await getAdminProfile(request.auth.uid);
+    if (!actor.superAdmin) {
+      throw new HttpsError(
+        'permission-denied',
+        'Solo un super administrador puede ejecutar esta migracion.',
+      );
+    }
+
+    const rows = Array.isArray(request.data?.rows) ? request.data.rows : [];
+    if (rows.length === 0) {
+      throw new HttpsError('invalid-argument', 'No hay usuarios para migrar.');
+    }
+
+    const normalizedRows = [];
+    const results = [];
+    const seenCodes = new Set();
+    const seenMeters = new Set();
+
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index] ?? {};
+      const rowNumber = index + 2;
+      try {
+        const codigoUsuario = normalizeUppercaseCode(row.codigoUsuario, 'codigousuario');
+        const numeroContador = normalizeUppercaseCode(row.numeroContador, 'numcontador');
+        const numeroDocumento = normalizeString(row.numeroDocumento, 'documento');
+        const nombre = normalizeLowercase(row.nombre, 'nombre');
+        const sector = await getActiveCatalogValue(
+          SECTOR_COLLECTION,
+          normalizeLowercase(row.sector, 'sector'),
+          'sector',
+        );
+
+        if (seenCodes.has(codigoUsuario)) {
+          throw new HttpsError('already-exists', 'codigousuario repetido en el archivo.');
+        }
+        if (seenMeters.has(numeroContador)) {
+          throw new HttpsError('already-exists', 'numcontador repetido en el archivo.');
+        }
+        seenCodes.add(codigoUsuario);
+        seenMeters.add(numeroContador);
+
+        normalizedRows.push({
+          rowNumber,
+          codigoUsuario,
+          numeroContador,
+          numeroDocumento,
+          nombre,
+          sector: sector.valor,
+        });
+      } catch (error) {
+        results.push({
+          rowNumber,
+          ok: false,
+          message: error?.message || 'Fila invalida.',
+        });
+      }
+    }
+
+    if (results.some((item) => !item.ok)) {
+      return { imported: 0, failed: results.length, results };
+    }
+
+    const clientsSnapshot = await db
+      .collection(USER_COLLECTION)
+      .where('rol', '==', 'cliente')
+      .get();
+    const clients = clientsSnapshot.docs;
+    const clientsByCode = new Map();
+    for (const doc of clients) {
+      const data = doc.data();
+      if (typeof data.codigoUsuario === 'string' && data.codigoUsuario !== 'na') {
+        clientsByCode.set(data.codigoUsuario, doc);
+      }
+      if (Array.isArray(data.codigosUsuario)) {
+        for (const pair of data.codigosUsuario) {
+          if (typeof pair?.codigoUsuario === 'string' && pair.codigoUsuario !== 'na') {
+            clientsByCode.set(pair.codigoUsuario, doc);
+          }
+        }
+      }
+    }
+
+    const groups = new Map();
+    for (const row of normalizedRows) {
+      const existingDoc = clientsByCode.get(row.codigoUsuario);
+      const key = row.numeroDocumento;
+      if (!groups.has(key)) {
+        groups.set(key, { rows: [], docs: new Map() });
+      }
+      const group = groups.get(key);
+      group.rows.push(row);
+      if (existingDoc) {
+        group.docs.set(existingDoc.id, existingDoc);
+      }
+    }
+
+    const batchLimit = 400;
+    let batch = db.batch();
+    let writes = 0;
+    let merged = 0;
+    let deleted = 0;
+
+    async function commitIfNeeded(force = false) {
+      if (writes === 0 || (!force && writes < batchLimit)) {
+        return;
+      }
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
+
+    for (const [documentNumber, group] of groups.entries()) {
+      const docs = [...group.docs.values()];
+      const canonicalRef = docs.length > 0
+        ? docs.sort((a, b) => a.id.localeCompare(b.id))[0].ref
+        : db.collection(USER_COLLECTION).doc();
+      const canonicalSnapshot = docs.find((doc) => doc.id === canonicalRef.id);
+      const existingData = canonicalSnapshot?.data() ?? {};
+      const allDocsData = docs.map((doc) => doc.data());
+      const firstRow = group.rows[0];
+      const pairs = group.rows.map((row) => ({
+        codigoUsuario: row.codigoUsuario,
+        numeroContador: row.numeroContador,
+        sector: row.sector,
+      }));
+      const meters = pairs.map((pair) => pair.numeroContador);
+      const codeValues = pairs.map((pair) => pair.codigoUsuario);
+      const contacto = [existingData, ...allDocsData]
+        .map((data) => data.numeroContacto)
+        .find((value) => typeof value === 'string' && value && value !== 'na') ?? 'na';
+      const correo = [existingData, ...allDocsData]
+        .map((data) => data.correo)
+        .find((value) => typeof value === 'string' && value && value !== 'na') ?? 'na';
+
+      batch.set(
+        canonicalRef,
+        {
+          uid: canonicalRef.id,
+          nombre: firstRow.nombre,
+          tipoDocumento: existingData.tipoDocumento ?? 'cc',
+          numeroDocumento: documentNumber,
+          numeroContacto: contacto,
+          codigoUsuario: pairs[0]?.codigoUsuario ?? 'na',
+          numeroContador: meters,
+          codigosUsuario: pairs,
+          codigosUsuarioValores: codeValues,
+          rol: 'cliente',
+          tipoCliente: existingData.tipoCliente ?? 'socio',
+          sector: pairs[0]?.sector ?? existingData.sector ?? 'na',
+          correo,
+          estado: existingData.estado ?? ACTIVE_STATUS,
+          superAdmin: existingData.superAdmin === true,
+          fechaCreacion:
+            existingData.fechaCreacion ?? admin.firestore.FieldValue.serverTimestamp(),
+          fechaActualizacion: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      writes++;
+      merged++;
+
+      for (const doc of docs) {
+        if (doc.id === canonicalRef.id) {
+          continue;
+        }
+        batch.delete(doc.ref);
+        writes++;
+        deleted++;
+        try {
+          await admin.auth().deleteUser(doc.id);
+        } catch (error) {
+          if (error?.code !== 'auth/user-not-found') {
+            throw error;
+          }
+        }
+      }
+
+      for (const row of group.rows) {
+        results.push({
+          rowNumber: row.rowNumber,
+          ok: true,
+          codigoUsuario: row.codigoUsuario,
+        });
+      }
+      await commitIfNeeded();
+    }
+
+    await commitIfNeeded(true);
+    await writeUserLog({
+      action: 'migracion_union_clientes',
+      actor,
+      targetUid: 'migracion_clientes_documento',
+      targetName: `Migracion clientes por documento (${merged})`,
+      newData: { merged, deleted },
+    });
+
+    return {
+      imported: merged,
+      failed: 0,
+      merged,
+      deleted,
+      results,
+    };
+  },
+);
 
 exports.normalizeImportedUserPlaceholders = onCall(
   { cors: true, invoker: 'public', timeoutSeconds: 540, memory: '1GiB' },
@@ -1104,6 +1453,7 @@ exports.importConsumptionReadings = onCall(
           codigoUsuario,
           codigoContador: client.meterCode,
           nombreUsuario: client.data.nombre ?? '',
+          sector: client.sector ?? '',
           lecturaActual,
           periodoActual: period,
           fecha: now,

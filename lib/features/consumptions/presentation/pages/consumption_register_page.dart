@@ -33,7 +33,8 @@ class ConsumptionRegisterPage extends StatefulWidget {
   final ConsumptionLocalCacheService? localCacheService;
 
   @override
-  State<ConsumptionRegisterPage> createState() => _ConsumptionRegisterPageState();
+  State<ConsumptionRegisterPage> createState() =>
+      _ConsumptionRegisterPageState();
 }
 
 class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
@@ -92,16 +93,19 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         .where((item) => item.periodoActual == _workingPeriod)
         .toList();
     final compact = MediaQuery.sizeOf(context).width < 760;
-    final pendingCount =
-        periodReadings.where((item) => item.isPendingUpload).length;
+    final pendingCount = periodReadings
+        .where((item) => item.isPendingUpload)
+        .length;
     final blockedCount = periodReadings.where((item) => item.isBlocked).length;
-    final irregularCount = periodReadings.where((item) => item.hasIrregularity).length;
+    final irregularCount = periodReadings
+        .where((item) => item.hasIrregularity)
+        .length;
     final missingReadingsCount = _pendingCustomersWithoutReading().length;
     final visibleCustomers = _showPendingReadings
         ? filteredPendingCustomers
         : _showIrregularReadings
-            ? filteredIrregularCustomers
-            : filteredCustomers;
+        ? filteredIrregularCustomers
+        : filteredCustomers;
     final listIsEmpty = visibleCustomers.isEmpty;
     final customerList = listIsEmpty
         ? const Center(
@@ -141,7 +145,8 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                 activePeriod: _workingPeriod,
                 reading: reading,
                 previousReading: previousReading,
-                onRegister: _workingPeriod == null ||
+                onRegister:
+                    _workingPeriod == null ||
                         reading?.facturado == true ||
                         reading?.pagado == true
                     ? null
@@ -187,7 +192,8 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                       const SizedBox(height: 8),
                       _ReadingSearchFieldSelector(
                         selected: _searchField,
-                        onChanged: (value) => setState(() => _searchField = value),
+                        onChanged: (value) =>
+                            setState(() => _searchField = value),
                       ),
                       const SizedBox(height: 16),
                       customerList,
@@ -224,7 +230,8 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
                     const SizedBox(height: 8),
                     _ReadingSearchFieldSelector(
                       selected: _searchField,
-                      onChanged: (value) => setState(() => _searchField = value),
+                      onChanged: (value) =>
+                          setState(() => _searchField = value),
                     ),
                     const SizedBox(height: 16),
                     Expanded(child: customerList),
@@ -306,7 +313,9 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
       return const [];
     }
     return _customers
-        .where((customer) => _readingFor(customer.codigoContador, period) == null)
+        .where(
+          (customer) => _readingFor(customer.codigoContador, period) == null,
+        )
         .toList();
   }
 
@@ -314,7 +323,8 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     if (_workingPeriod == null) {
       _showInfoDialog(
         title: 'Sin periodo de trabajo',
-        message: 'Descarga primero el periodo vigente para revisar lecturas pendientes.',
+        message:
+            'Descarga primero el periodo vigente para revisar lecturas pendientes.',
       );
       return;
     }
@@ -330,7 +340,8 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     if (_workingPeriod == null) {
       _showInfoDialog(
         title: 'Sin periodo de trabajo',
-        message: 'Descarga primero el periodo vigente para revisar irregularidades.',
+        message:
+            'Descarga primero el periodo vigente para revisar irregularidades.',
       );
       return;
     }
@@ -361,11 +372,12 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
     if (beforePeriod == null) {
       return null;
     }
-    final previous = _readings
-        .where((item) => item.codigoContador == meterCode)
-        .where((item) => item.periodoActual.compareTo(beforePeriod) < 0)
-        .toList()
-      ..sort((a, b) => b.periodoActual.compareTo(a.periodoActual));
+    final previous =
+        _readings
+            .where((item) => item.codigoContador == meterCode)
+            .where((item) => item.periodoActual.compareTo(beforePeriod) < 0)
+            .toList()
+          ..sort((a, b) => b.periodoActual.compareTo(a.periodoActual));
     return previous.isEmpty ? null : previous.first;
   }
 
@@ -386,9 +398,9 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
             ];
           });
         } else {
-        throw StateError(
-          'Todavía hay lecturas locales pendientes por subir. Sube o resuelve primero el período de trabajo actual antes de descargar otro.',
-        );
+          throw StateError(
+            'Todavía hay lecturas locales pendientes por subir. Sube o resuelve primero el período de trabajo actual antes de descargar otro.',
+          );
         }
       }
 
@@ -494,11 +506,11 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
             .map((index) => readings[index])
             .where((item) => item.periodoActual == period)
             .map((item) => item.codigoContador);
-        previousByPeriod[period] =
-            await _firestoreService.fetchLatestPreviousReadingsByMeter(
-          meterCodes: meterCodes,
-          currentPeriod: period,
-        );
+        previousByPeriod[period] = await _firestoreService
+            .fetchLatestPreviousReadingsByMeter(
+              meterCodes: meterCodes,
+              currentPeriod: period,
+            );
       }
 
       final conflicts = <String>[];
@@ -509,8 +521,10 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
 
       for (final index in pendingIndexes) {
         final item = readings[index];
-        final existing = existingByKey['${item.periodoActual}|${item.codigoContador}'];
-        final previous = previousByPeriod[item.periodoActual]?[item.codigoContador];
+        final existing =
+            existingByKey['${item.periodoActual}|${item.codigoContador}'];
+        final previous =
+            previousByPeriod[item.periodoActual]?[item.codigoContador];
 
         if (existing != null && _officialStates.contains(existing.estado)) {
           final message =
@@ -560,7 +574,9 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
         }
 
         final syncedReading = item.copyWith(
-          estado: item.hasIrregularity ? 'irregularidad_reportada' : 'sincronizado',
+          estado: item.hasIrregularity
+              ? 'irregularidad_reportada'
+              : 'sincronizado',
           lecturaAnterior: previous?.lecturaActual,
           consumoCalculado: previous == null
               ? null
@@ -686,13 +702,13 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   List<ConsumptionCustomer> _buildCustomerCache(List<AppUser> users) {
     final items = <ConsumptionCustomer>[];
     for (final user in users) {
-      for (final meter in user.numeroContador) {
+      for (final code in user.codigosUsuario) {
         items.add(
           ConsumptionCustomer(
-            codigoUsuario: user.codigoUsuario,
-            codigoContador: meter,
+            codigoUsuario: code.codigoUsuario,
+            codigoContador: code.numeroContador,
             nombreUsuario: user.nombre,
-            sector: user.sector,
+            sector: code.sector,
           ),
         );
       }
@@ -730,7 +746,10 @@ class _ConsumptionRegisterPageState extends State<ConsumptionRegisterPage> {
   List<ConsumptionReading> _uploadableReadingsForWorkingPeriod() {
     final workingPeriod = _workingPeriod;
     return _readings
-        .where((item) => workingPeriod == null || item.periodoActual == workingPeriod)
+        .where(
+          (item) =>
+              workingPeriod == null || item.periodoActual == workingPeriod,
+        )
         .where((item) => item.isPendingUpload)
         .toList();
   }
@@ -1058,10 +1077,7 @@ class _PendingReadingRow extends StatelessWidget {
 }
 
 class _PendingValue extends StatelessWidget {
-  const _PendingValue({
-    required this.label,
-    required this.value,
-  });
+  const _PendingValue({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1101,8 +1117,8 @@ class _ConsumptionCustomerCard extends StatelessWidget {
     final statusColor = blocked
         ? Colors.orange.shade800
         : irregular
-            ? Colors.red.shade800
-            : AppColors.textSecondary;
+        ? Colors.red.shade800
+        : AppColors.textSecondary;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1113,8 +1129,8 @@ class _ConsumptionCustomerCard extends StatelessWidget {
           color: blocked
               ? Colors.orange.shade200
               : irregular
-                  ? Colors.red.shade200
-                  : AppColors.border,
+              ? Colors.red.shade200
+              : AppColors.border,
         ),
       ),
       child: LayoutBuilder(
@@ -1128,7 +1144,9 @@ class _ConsumptionCustomerCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 6),
-              Text('Código usuario: ${customer.codigoUsuario} - Contador: ${customer.codigoContador}'),
+              Text(
+                'Código usuario: ${customer.codigoUsuario} - Contador: ${customer.codigoContador}',
+              ),
               const SizedBox(height: 6),
               Text('Sector: ${_displaySector(customer.sector)}'),
               const SizedBox(height: 6),
@@ -1149,9 +1167,9 @@ class _ConsumptionCustomerCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Estado: ${reading!.estado} - Operario: ${toDisplayUserName(reading!.nombreOperario)}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: statusColor,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: statusColor),
                 ),
                 if ((reading!.observacionesOperario ?? '').isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -1170,9 +1188,9 @@ class _ConsumptionCustomerCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     reading!.detalleEstado!,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: statusColor,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: statusColor),
                   ),
                 ],
               ],
@@ -1185,7 +1203,9 @@ class _ConsumptionCustomerCard extends StatelessWidget {
               reading == null ? Icons.edit_note_rounded : Icons.edit_rounded,
             ),
             label: Text(
-              reading == null ? 'Registrar lectura' : 'Actualizar en dispositivo',
+              reading == null
+                  ? 'Registrar lectura'
+                  : 'Actualizar en dispositivo',
             ),
           );
 
@@ -1279,7 +1299,9 @@ class _ReadingDialogState extends State<_ReadingDialog> {
                   const SizedBox(height: 8),
                   Text('Código contador: ${widget.customer.codigoContador}'),
                   const SizedBox(height: 8),
-                  Text('Usuario: ${toDisplayUserName(widget.customer.nombreUsuario)}'),
+                  Text(
+                    'Usuario: ${toDisplayUserName(widget.customer.nombreUsuario)}',
+                  ),
                   const SizedBox(height: 8),
                   Text('Sector: ${_displaySector(widget.customer.sector)}'),
                   const SizedBox(height: 8),
@@ -1293,7 +1315,9 @@ class _ReadingDialogState extends State<_ReadingDialog> {
                     controller: _readingController,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(labelText: 'Lectura actual'),
+                    decoration: const InputDecoration(
+                      labelText: 'Lectura actual',
+                    ),
                     validator: (value) {
                       final parsed = int.tryParse(value?.trim() ?? '');
                       if (parsed == null) {
@@ -1346,10 +1370,7 @@ class _ReadingDialogState extends State<_ReadingDialog> {
                           value: 'fuga_o_anomalia',
                           child: Text('Fuga o anomalía'),
                         ),
-                        DropdownMenuItem(
-                          value: 'otro',
-                          child: Text('Otro'),
-                        ),
+                        DropdownMenuItem(value: 'otro', child: Text('Otro')),
                       ],
                       onChanged: (value) {
                         if (value != null) {
@@ -1369,7 +1390,8 @@ class _ReadingDialogState extends State<_ReadingDialog> {
                           : 'Observaciones',
                     ),
                     validator: (value) {
-                      if (_reportIrregularity && (value?.trim().isEmpty ?? true)) {
+                      if (_reportIrregularity &&
+                          (value?.trim().isEmpty ?? true)) {
                         return 'Describe la irregularidad.';
                       }
                       return null;
@@ -1436,8 +1458,9 @@ class _ReadingDialogState extends State<_ReadingDialog> {
         actorUid: widget.currentUser.uid,
         estado: _reportIrregularity ? 'pendiente_revision' : 'pendiente_local',
         lecturaAnterior: previousValue,
-        consumoCalculado:
-            previousValue == null ? null : currentValue - previousValue,
+        consumoCalculado: previousValue == null
+            ? null
+            : currentValue - previousValue,
         facturado: widget.existingReading?.facturado ?? false,
         pagado: widget.existingReading?.pagado ?? false,
         observacionesOperario: _notesController.text.trim().isEmpty

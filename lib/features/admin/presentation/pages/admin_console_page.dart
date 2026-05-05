@@ -59,7 +59,8 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final narrow = constraints.hasBoundedWidth && constraints.maxWidth < 760;
+        final narrow =
+            constraints.hasBoundedWidth && constraints.maxWidth < 760;
         final sidebarWidth = narrow ? 184.0 : 248.0;
 
         return Row(
@@ -80,9 +81,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
               ),
             ),
             const SizedBox(width: 16),
-            Expanded(
-              child: selectedModule.screens[selectedScreenIndex].child,
-            ),
+            Expanded(child: selectedModule.screens[selectedScreenIndex].child),
           ],
         );
       },
@@ -108,6 +107,7 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
           _AdminScreen(
             title: 'Importar usuarios',
             child: UsersImportPage(
+              currentUser: widget.currentUser,
               adminFunctionsService: widget.userAdminFunctionsService,
             ),
           ),
@@ -120,7 +120,8 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
               itemName: 'tipo de documento',
               valueLabel: 'Valor BD',
               nameLabel: 'Nombre visible',
-              service: widget.documentTypeService ?? DocumentTypeCatalogService(),
+              service:
+                  widget.documentTypeService ?? DocumentTypeCatalogService(),
             ),
           ),
           _AdminScreen(
@@ -161,7 +162,9 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
         screens: [
           _AdminScreen(
             title: 'Conflictos',
-            child: ConsumptionConflictsAdminPage(currentUser: widget.currentUser),
+            child: ConsumptionConflictsAdminPage(
+              currentUser: widget.currentUser,
+            ),
           ),
           _AdminScreen(
             title: 'Registrar consumos',
@@ -195,7 +198,10 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
             child: BillingInvoicesPage(currentUser: widget.currentUser),
           ),
           _AdminScreen(title: 'Periodos', child: BillingPeriodsPage()),
-          _AdminScreen(title: 'Medios de pago', child: PaymentMethodsAdminPage()),
+          _AdminScreen(
+            title: 'Medios de pago',
+            child: PaymentMethodsAdminPage(),
+          ),
           _AdminScreen(
             title: 'Observaciones',
             child: BillingObservationsAdminPage(),
@@ -211,20 +217,14 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
 }
 
 class _AdminModule {
-  const _AdminModule({
-    required this.title,
-    required this.screens,
-  });
+  const _AdminModule({required this.title, required this.screens});
 
   final String title;
   final List<_AdminScreen> screens;
 }
 
 class _AdminScreen {
-  const _AdminScreen({
-    required this.title,
-    required this.child,
-  });
+  const _AdminScreen({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -272,22 +272,28 @@ class _AdminSidebarState extends State<_AdminSidebar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var moduleIndex = 0;
-                  moduleIndex < widget.modules.length;
-                  moduleIndex++) ...[
+              for (
+                var moduleIndex = 0;
+                moduleIndex < widget.modules.length;
+                moduleIndex++
+              ) ...[
                 _ModuleTitle(
                   title: widget.modules[moduleIndex].title,
                   selected: moduleIndex == widget.selectedModuleIndex,
                 ),
                 const SizedBox(height: 6),
-                for (var screenIndex = 0;
-                    screenIndex < widget.modules[moduleIndex].screens.length;
-                    screenIndex++)
+                for (
+                  var screenIndex = 0;
+                  screenIndex < widget.modules[moduleIndex].screens.length;
+                  screenIndex++
+                )
                   _ScreenNavButton(
                     title:
                         widget.modules[moduleIndex].screens[screenIndex].title,
-                    selected: moduleIndex == widget.selectedModuleIndex &&
-                        screenIndex == widget.selectedScreenIndexes[moduleIndex],
+                    selected:
+                        moduleIndex == widget.selectedModuleIndex &&
+                        screenIndex ==
+                            widget.selectedScreenIndexes[moduleIndex],
                     onTap: () => widget.onSelected(moduleIndex, screenIndex),
                   ),
                 if (moduleIndex < widget.modules.length - 1)
@@ -302,10 +308,7 @@ class _AdminSidebarState extends State<_AdminSidebar> {
 }
 
 class _ModuleTitle extends StatelessWidget {
-  const _ModuleTitle({
-    required this.title,
-    required this.selected,
-  });
+  const _ModuleTitle({required this.title, required this.selected});
 
   final String title;
   final bool selected;
@@ -315,11 +318,11 @@ class _ModuleTitle extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: selected
-                ? Theme.of(context).colorScheme.primary
-                : AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
+        color: selected
+            ? Theme.of(context).colorScheme.primary
+            : AppColors.textPrimary,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }
@@ -355,10 +358,9 @@ class _ScreenNavButton extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color:
-                        selected ? colorScheme.primary : AppColors.textSecondary,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
+                color: selected ? colorScheme.primary : AppColors.textSecondary,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ),
         ),

@@ -8,15 +8,18 @@ import '../../../../core/platform/excel_file_picker_stub.dart'
     if (dart.library.html) '../../../../core/platform/excel_file_picker_web.dart';
 import '../../../../theme/app_colors.dart';
 import '../../data/user_admin_functions_service.dart';
+import '../../domain/app_user.dart';
 import 'user_import_file_exporter_stub.dart'
     if (dart.library.html) 'user_import_file_exporter_web.dart';
 
 class UsersImportPage extends StatefulWidget {
   const UsersImportPage({
     super.key,
+    required this.currentUser,
     this.adminFunctionsService,
   });
 
+  final AppUser currentUser;
   final UserAdminFunctionsService? adminFunctionsService;
 
   @override
@@ -33,6 +36,13 @@ class _UsersImportPageState extends State<UsersImportPage> {
     'celular',
     'nombre',
     'correo',
+  ];
+  static const _mergeColumns = [
+    'sector',
+    'numcontador',
+    'codigousuario',
+    'documento',
+    'nombre',
   ];
 
   late final UserAdminFunctionsService _service =
@@ -71,6 +81,9 @@ class _UsersImportPageState extends State<UsersImportPage> {
                 ),
                 OutlinedButton.icon(
                   onPressed: _isBusy ? null : _pickFile,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                  ),
                   icon: const Icon(Icons.upload_file_rounded),
                   label: const Text('Seleccionar archivo'),
                 ),
@@ -79,6 +92,15 @@ class _UsersImportPageState extends State<UsersImportPage> {
                   icon: const Icon(Icons.cloud_upload_rounded),
                   label: const Text('Importar registros'),
                 ),
+                if (widget.currentUser.superAdmin)
+                  OutlinedButton.icon(
+                    onPressed: _isBusy ? null : _pickMergeFile,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                    ),
+                    icon: const Icon(Icons.merge_type_rounded),
+                    label: const Text('Migrar y unir por documento'),
+                  ),
               ],
             ),
             if (_message case final message?) ...[
@@ -187,20 +209,71 @@ class _UsersImportPageState extends State<UsersImportPage> {
       throw Exception('Faltan columnas: ${missing.join(', ')}');
     }
 
-    return table.rows.skip(1).map((row) {
-      return {
-        'tipoUsuario': _cell(row, indexes['tipousuario']!),
-        'sector': _cell(row, indexes['sector']!),
-        'numeroContador': _cell(row, indexes['numcontador']!).toUpperCase(),
-        'codigoUsuario': _cell(row, indexes['codigousuario']!).toUpperCase(),
-        'numeroDocumento': _cell(row, indexes['documento']!),
-        'numeroContacto': _cell(row, indexes['celular']!),
-        'nombre': _cell(row, indexes['nombre']!),
-        'correo': _cell(row, indexes['correo']!).toLowerCase(),
-      };
-    }).where((row) {
-      return row.values.any((value) => value.trim().isNotEmpty);
-    }).toList();
+    return table.rows
+        .skip(1)
+        .map((row) {
+          return {
+            'tipoUsuario': _cell(row, indexes['tipousuario']!),
+            'sector': _cell(row, indexes['sector']!),
+            'numeroContador': _cell(row, indexes['numcontador']!).toUpperCase(),
+            'codigoUsuario': _cell(
+              row,
+              indexes['codigousuario']!,
+            ).toUpperCase(),
+            'numeroDocumento': _cell(row, indexes['documento']!),
+            'numeroContacto': _cell(row, indexes['celular']!),
+            'nombre': _cell(row, indexes['nombre']!),
+            'correo': _cell(row, indexes['correo']!).toLowerCase(),
+          };
+        })
+        .where((row) {
+          return row.values.any((value) => value.trim().isNotEmpty);
+        })
+        .toList();
+  }
+
+  List<Map<String, String>> _parseMergeWorkbook(Uint8List bytes) {
+    final workbook = xls.Excel.decodeBytes(bytes);
+    if (workbook.tables.isEmpty) {
+      return const [];
+    }
+    final table = workbook.tables.values.first;
+    if (table.rows.isEmpty) {
+      return const [];
+    }
+
+    final header = table.rows.first
+        .map((cell) => _normalizeHeader(cell?.value.toString() ?? ''))
+        .toList();
+    final indexes = {
+      for (final column in _mergeColumns) column: header.indexOf(column),
+    };
+    final missing = indexes.entries
+        .where((entry) => entry.value < 0)
+        .map((entry) => entry.key)
+        .toList();
+    if (missing.isNotEmpty) {
+      throw Exception('Faltan columnas: ${missing.join(', ')}');
+    }
+
+    return table.rows
+        .skip(1)
+        .map((row) {
+          return {
+            'sector': _cell(row, indexes['sector']!),
+            'numeroContador': _cell(row, indexes['numcontador']!).toUpperCase(),
+            'codigoUsuario': _cell(
+              row,
+              indexes['codigousuario']!,
+            ).toUpperCase(),
+            'numeroDocumento': _cell(row, indexes['documento']!),
+            'nombre': _cell(row, indexes['nombre']!),
+          };
+        })
+        .where((row) {
+          return row.values.any((value) => value.trim().isNotEmpty);
+        })
+        .toList();
   }
 
   String _cell(List<xls.Data?> row, int index) {
@@ -240,13 +313,40 @@ class _UsersImportPageState extends State<UsersImportPage> {
       }
     }
   }
+
+  Future<void> _pickMergeFile() async {
+    setState(() {
+      _isBusy = true;
+      _message = null;
+      _summary = null;
+    });
+    try {
+      final bytes = await pickExcelFileBytes();
+      if (bytes == null) {
+        return;
+      }
+      final parsedRows = _parseMergeWorkbook(bytes);
+      final summary = await _service.mergeClientUsersByDocument(parsedRows);
+      setState(() {
+        _rows = parsedRows;
+        _summary = summary;
+        _message =
+            'Migración finalizada: ${summary.imported} usuarios unificados, ${summary.failed} con error.';
+      });
+    } catch (error) {
+      setState(
+        () => _message = 'No fue posible migrar y unir usuarios: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
 }
 
 class _ImportPreviewTable extends StatelessWidget {
-  const _ImportPreviewTable({
-    required this.rows,
-    required this.columns,
-  });
+  const _ImportPreviewTable({required this.rows, required this.columns});
 
   final List<Map<String, String>> rows;
   final List<String> columns;
@@ -257,7 +357,9 @@ class _ImportPreviewTable extends StatelessWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          columns: columns.map((item) => DataColumn(label: Text(item))).toList(),
+          columns: columns
+              .map((item) => DataColumn(label: Text(item)))
+              .toList(),
           rows: rows.map((row) {
             return DataRow(
               cells: [
@@ -299,7 +401,9 @@ class _ImportSummaryCard extends StatelessWidget {
           Text('Importados: ${summary.imported} · Errores: ${summary.failed}'),
           if (failedRows.isNotEmpty) ...[
             const SizedBox(height: 8),
-            ...failedRows.take(8).map(
+            ...failedRows
+                .take(8)
+                .map(
                   (item) => Text(
                     'Fila ${item.rowNumber}: ${item.message ?? 'Error'}',
                   ),

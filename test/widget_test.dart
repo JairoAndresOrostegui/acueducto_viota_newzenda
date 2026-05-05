@@ -151,6 +151,7 @@ class FakeUserFirestoreService extends UserFirestoreService {
       numeroContacto: '3012176100',
       codigoUsuario: 'NA',
       numeroContador: const [],
+      codigosUsuario: const [],
       rol: 'administrador',
       tipoCliente: 'na',
       sector: 'NA',

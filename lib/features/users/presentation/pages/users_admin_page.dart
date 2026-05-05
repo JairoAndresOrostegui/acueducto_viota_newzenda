@@ -427,9 +427,25 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
         user.numeroDocumento.toLowerCase().contains(q) ||
             user.tipoDocumento.toLowerCase().contains(q),
       'estado' => user.estado.toLowerCase().contains(q),
-      'codigoUsuario' => user.codigoUsuario.toLowerCase().contains(q),
-      'contador' => user.numeroContador.join(' ').toLowerCase().contains(q),
-      'sector' => user.sector.toLowerCase().contains(q),
+      'codigoUsuario' =>
+        user.codigosUsuario
+            .map((item) => item.codigoUsuario)
+            .join(' ')
+            .toLowerCase()
+            .contains(q),
+      'contador' =>
+        user.codigosUsuario
+            .map((item) => item.numeroContador)
+            .join(' ')
+            .toLowerCase()
+            .contains(q),
+      'sector' =>
+        user.codigosUsuario
+            .map((item) => item.sector)
+            .join(' ')
+            .toLowerCase()
+            .contains(q) ||
+        user.sector.toLowerCase().contains(q),
       _ => user.nombre.toLowerCase().contains(q),
     };
   }
@@ -636,7 +652,6 @@ class UserFormDialog extends StatefulWidget {
 }
 
 class _UserFormDialogState extends State<UserFormDialog> {
-  static const String _notApplicableLabel = 'NA';
   static const List<String> _clientTypes = ['socio', 'suscriptor'];
 
   final _formKey = GlobalKey<FormState>();
@@ -647,18 +662,8 @@ class _UserFormDialogState extends State<UserFormDialog> {
       TextEditingController(text: widget.user?.numeroDocumento ?? '');
   late final TextEditingController _numeroContactoController =
       TextEditingController(text: widget.user?.numeroContacto ?? '');
-  late final TextEditingController _codigoUsuarioController =
-      TextEditingController(
-        text: widget.user?.codigoUsuario == 'na'
-            ? ''
-            : widget.user?.codigoUsuario ?? '',
-      );
-  late final TextEditingController _numeroContadorController =
-      TextEditingController(
-        text: widget.user == null || widget.user!.numeroContador.isEmpty
-            ? ''
-            : widget.user!.numeroContador.first,
-      );
+  late final List<_ClientCodeFormRow> _clientCodeRows =
+      _initialClientCodeRows();
   late final TextEditingController _correoController = TextEditingController(
     text: widget.user?.correo ?? '',
   );
@@ -673,6 +678,11 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
   bool get _isEditing => widget.user != null;
   bool get _isClient => _rol == 'cliente';
+  bool get _showLegacyClientFields => false;
+  TextEditingController get _legacyRemovedCodigoUsuarioController =>
+      _clientCodeRows.first.codigoUsuarioController;
+  TextEditingController get _legacyRemovedNumeroContadorController =>
+      _clientCodeRows.first.numeroContadorController;
 
   List<TextInputFormatter> get _codeInputFormatters => [
     FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
@@ -689,8 +699,9 @@ class _UserFormDialogState extends State<UserFormDialog> {
     _nombreController.dispose();
     _numeroDocumentoController.dispose();
     _numeroContactoController.dispose();
-    _codigoUsuarioController.dispose();
-    _numeroContadorController.dispose();
+    for (final row in _clientCodeRows) {
+      row.dispose();
+    }
     _correoController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -761,33 +772,41 @@ class _UserFormDialogState extends State<UserFormDialog> {
                               width: width * 2 + 16,
                               child: _password(),
                             ),
-                          _FieldBox(
-                            width: width,
-                            child: _text(
-                              _codigoUsuarioController,
-                              'Código usuario',
-                              enabled: _isClient,
-                              validator: _isClient ? _codeRequired : null,
-                              textCapitalization: TextCapitalization.characters,
-                              inputFormatters: _codeInputFormatters,
+                          if (_showLegacyClientFields)
+                            _FieldBox(
+                              width: width,
+                              child: _text(
+                                _legacyRemovedCodigoUsuarioController,
+                                'Código usuario',
+                                enabled: _isClient,
+                                validator: _isClient ? _codeRequired : null,
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                inputFormatters: _codeInputFormatters,
+                              ),
                             ),
-                          ),
-                          _FieldBox(
-                            width: width,
-                            child: _text(
-                              _numeroContadorController,
-                              'Código contador',
-                              enabled: _isClient,
-                              validator: _isClient
-                                  ? _meterNumbersValidator
-                                  : null,
-                              textCapitalization: TextCapitalization.characters,
-                              inputFormatters: _codeInputFormatters,
+                          if (_showLegacyClientFields)
+                            _FieldBox(
+                              width: width,
+                              child: _text(
+                                _legacyRemovedNumeroContadorController,
+                                'Código contador',
+                                enabled: _isClient,
+                                validator: _isClient
+                                    ? _meterNumbersValidator
+                                    : null,
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                inputFormatters: _codeInputFormatters,
+                              ),
                             ),
-                          ),
                           _FieldBox(width: width, child: _selectSector()),
                         ],
                       ),
+                      if (_isClient) ...[
+                        const SizedBox(height: 18),
+                        _clientCodesEditor(width),
+                      ],
                       if (_isClient && widget.sectors.isEmpty) ...[
                         const SizedBox(height: 12),
                         const Text(
@@ -843,6 +862,109 @@ class _UserFormDialogState extends State<UserFormDialog> {
       inputFormatters: inputFormatters,
       decoration: InputDecoration(labelText: label),
       validator: validator ?? _required,
+    );
+  }
+
+  Widget _clientCodesEditor(double fieldWidth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Códigos de usuario',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _addClientCodeRow,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+              ),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Agregar código'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ..._clientCodeRows.asMap().entries.map((entry) {
+          final index = entry.key;
+          final row = entry.value;
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: index == _clientCodeRows.length - 1 ? 0 : 12,
+            ),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _FieldBox(
+                  width: fieldWidth,
+                  child: _text(
+                    row.codigoUsuarioController,
+                    'Código usuario',
+                    validator: _codeRequired,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: _codeInputFormatters,
+                  ),
+                ),
+                _FieldBox(
+                  width: fieldWidth,
+                  child: _text(
+                    row.numeroContadorController,
+                    'Código contador',
+                    validator: _meterNumbersValidator,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: _codeInputFormatters,
+                  ),
+                ),
+                _FieldBox(width: fieldWidth, child: _selectCodeSector(row)),
+                IconButton.outlined(
+                  onPressed: _clientCodeRows.length <= 1
+                      ? null
+                      : () => _removeClientCodeRow(index),
+                  tooltip: 'Eliminar código',
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _selectCodeSector(_ClientCodeFormRow row) {
+    final sectorItems = [
+      if (widget.allowEmptyFields)
+        const DropdownMenuItem(value: 'na', child: Text('Sin sector')),
+      ...widget.sectors.map(
+        (item) => DropdownMenuItem(
+          value: item.valor,
+          child: Text(
+            toDisplayText(item.nombre),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    ];
+    return DropdownButtonFormField<String>(
+      isExpanded: true,
+      initialValue: row.sector,
+      decoration: const InputDecoration(labelText: 'Sector del código'),
+      items: sectorItems,
+      onChanged: (value) => setState(() => row.sector = value ?? 'na'),
+      validator: (value) {
+        if (widget.allowEmptyFields) {
+          return null;
+        }
+        if ((value ?? '').trim().isEmpty || value == 'na') {
+          return 'Selecciona un sector.';
+        }
+        return null;
+      },
     );
   }
 
@@ -1164,16 +1286,31 @@ class _UserFormDialogState extends State<UserFormDialog> {
     return _clientTypes.first;
   }
 
+  List<_ClientCodeFormRow> _initialClientCodeRows() {
+    final existing = widget.user?.codigosUsuario ?? const <ClientUserCode>[];
+    if (existing.isNotEmpty) {
+      return existing.map(_ClientCodeFormRow.fromCode).toList();
+    }
+    return [_ClientCodeFormRow(sector: _sector ?? 'na')];
+  }
+
+  void _addClientCodeRow() {
+    setState(
+      () => _clientCodeRows.add(_ClientCodeFormRow(sector: _sector ?? 'na')),
+    );
+  }
+
+  void _removeClientCodeRow(int index) {
+    if (_clientCodeRows.length <= 1) {
+      return;
+    }
+    final row = _clientCodeRows.removeAt(index);
+    row.dispose();
+    setState(() {});
+  }
+
   void _syncRoleDependentFields() {
     if (_isClient) {
-      if (_codigoUsuarioController.text.trim().toUpperCase() ==
-          _notApplicableLabel) {
-        _codigoUsuarioController.clear();
-      }
-      if (_numeroContadorController.text.trim().toUpperCase() ==
-          _notApplicableLabel) {
-        _numeroContadorController.clear();
-      }
       if (!_clientTypes.contains(_tipoCliente)) {
         _tipoCliente = _clientTypes.first;
       }
@@ -1181,8 +1318,6 @@ class _UserFormDialogState extends State<UserFormDialog> {
       return;
     }
 
-    _codigoUsuarioController.text = _notApplicableLabel;
-    _numeroContadorController.text = _notApplicableLabel;
     _tipoCliente = 'na';
     _sector = null;
   }
@@ -1197,18 +1332,22 @@ class _UserFormDialogState extends State<UserFormDialog> {
 
     final now = DateTime.now();
     final existing = widget.user;
+    final clientCodes = _isClient
+        ? _parseClientCodes()
+        : const <ClientUserCode>[];
+    final primaryCode = clientCodes.isEmpty
+        ? 'na'
+        : clientCodes.first.codigoUsuario;
+    final meters = clientCodes.map((item) => item.numeroContador).toList();
     final user = AppUser(
       uid: existing?.uid ?? '',
       nombre: _nombreController.text.trim().toLowerCase(),
       tipoDocumento: _tipoDocumento!,
       numeroDocumento: _numeroDocumentoController.text.trim(),
       numeroContacto: _numeroContactoController.text.trim(),
-      codigoUsuario: _isClient
-          ? _codigoUsuarioController.text.trim().toUpperCase()
-          : 'na',
-      numeroContador: _isClient
-          ? _parseMeterNumbers(_numeroContadorController.text)
-          : const [],
+      codigoUsuario: primaryCode,
+      numeroContador: meters,
+      codigosUsuario: clientCodes,
       rol: _rol!,
       tipoCliente: _isClient ? _tipoCliente : 'na',
       sector: _isClient ? (_sector ?? '') : 'na',
@@ -1235,6 +1374,50 @@ class _UserFormDialogState extends State<UserFormDialog> {
         .map((item) => item.trim().toUpperCase())
         .where((item) => item.isNotEmpty && item.toLowerCase() != 'na')
         .toList();
+  }
+
+  List<ClientUserCode> _parseClientCodes() {
+    return _clientCodeRows
+        .map(
+          (row) => ClientUserCode(
+            codigoUsuario: row.codigoUsuarioController.text
+                .trim()
+                .toUpperCase(),
+            numeroContador: row.numeroContadorController.text
+                .trim()
+                .toUpperCase(),
+            sector: row.sector,
+          ),
+        )
+        .where((item) => item.isValid)
+        .toList();
+  }
+}
+
+class _ClientCodeFormRow {
+  _ClientCodeFormRow({
+    String codigoUsuario = '',
+    String numeroContador = '',
+    this.sector = 'na',
+  })
+    : codigoUsuarioController = TextEditingController(text: codigoUsuario),
+      numeroContadorController = TextEditingController(text: numeroContador);
+
+  factory _ClientCodeFormRow.fromCode(ClientUserCode code) {
+    return _ClientCodeFormRow(
+      codigoUsuario: code.codigoUsuario,
+      numeroContador: code.numeroContador,
+      sector: code.sector,
+    );
+  }
+
+  final TextEditingController codigoUsuarioController;
+  final TextEditingController numeroContadorController;
+  String sector;
+
+  void dispose() {
+    codigoUsuarioController.dispose();
+    numeroContadorController.dispose();
   }
 }
 
@@ -1634,21 +1817,33 @@ class _UserCard extends StatelessWidget {
                   ),
                   _InfoChip(
                     label: 'Código',
-                    value: user.codigoUsuario == 'na'
+                    value: user.codigosUsuario.isEmpty
                         ? 'NA'
-                        : user.codigoUsuario,
+                        : user.codigosUsuario
+                              .map((item) => item.codigoUsuario)
+                              .join(', '),
                   ),
                   _InfoChip(
                     label: 'Contadores',
-                    value: user.numeroContador.isEmpty
+                    value: user.codigosUsuario.isEmpty
                         ? 'NA'
-                        : user.numeroContador.join(', '),
+                        : user.codigosUsuario
+                              .map(
+                                (item) =>
+                                    '${item.codigoUsuario} - ${item.numeroContador}',
+                              )
+                              .join(', '),
                   ),
                   _InfoChip(
                     label: 'Sector',
-                    value: user.sector == 'na'
-                        ? 'NA'
-                        : toDisplayText(user.sector),
+                    value: user.codigosUsuario.isEmpty
+                        ? (user.sector == 'na' ? 'NA' : toDisplayText(user.sector))
+                        : user.codigosUsuario
+                              .map(
+                                (item) =>
+                                    '${item.codigoUsuario} - ${toDisplayText(item.sector)}',
+                              )
+                              .join(', '),
                   ),
                 ],
               ),
