@@ -1179,9 +1179,13 @@ class _InvoicePreviewCard extends StatelessWidget {
           _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
         ],
       ),
-          if (invoice.saldoAnterior > 0) ...[
+          if (invoice.saldoAnterior != 0) ...[
             const SizedBox(height: 14),
-            Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
+            Text(
+              invoice.saldoAnterior < 0
+                  ? 'Saldo a favor: ${_formatCurrency(invoice.saldoAnterior.abs())}'
+                  : 'Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}',
+            ),
           ],
           const SizedBox(height: 14),
           ...invoice.lineas.map(

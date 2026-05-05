@@ -9,15 +9,18 @@ import '../../../billing/payment_methods/data/payment_method_firestore_service.d
 import '../../../billing/payment_methods/domain/payment_method.dart';
 import '../../../billing/periods/data/billing_period_firestore_service.dart';
 import '../../../billing/periods/domain/billing_period.dart';
+import '../../../users/domain/app_user.dart';
 
 class ConsumptionPaymentsPage extends StatefulWidget {
   const ConsumptionPaymentsPage({
     super.key,
+    required this.currentUser,
     this.periodService,
     this.invoiceService,
     this.paymentMethodService,
   });
 
+  final AppUser currentUser;
   final BillingPeriodFirestoreService? periodService;
   final InvoiceFirestoreService? invoiceService;
   final PaymentMethodFirestoreService? paymentMethodService;
@@ -134,6 +137,7 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
       await _invoiceService.updatePaymentStatus(
         invoice: invoice,
         paid: result.paid,
+        actor: widget.currentUser,
         paidAmount: result.paidAmount,
         paymentMethod: result.paymentMethod,
         observations: result.observations,
@@ -545,12 +549,18 @@ class _PaymentCard extends StatelessWidget {
               const SizedBox(height: 6),
               if (invoice.saldoAnterior > 0)
                 Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
-              if (invoice.saldoAnterior > 0) const SizedBox(height: 6),
+              if (invoice.saldoAnterior < 0)
+                Text(
+                  'Saldo a favor aplicado: ${_formatCurrency(invoice.saldoAnterior.abs())}',
+                ),
+              if (invoice.saldoAnterior != 0) const SizedBox(height: 6),
               Text(
                 invoice.estaSuspendido
                     ? 'Estado: suspendido Â· Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'
                     : invoice.pagado
                     ? 'Estado: pagado · Valor pagado: ${_formatCurrency(invoice.valorPagado ?? invoice.totalAPagar)}'
+                    : (invoice.valorPagado ?? 0) > 0
+                    ? 'Estado: abono registrado - Pagado: ${_formatCurrency(invoice.valorPagado ?? 0)} - Pendiente: ${_formatCurrency(invoice.saldoPendiente)}'
                     : 'Estado: facturado pendiente de pago',
                 style: Theme.of(
                   context,
@@ -689,7 +699,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                       const SizedBox(height: 4),
                       Text(
                         _paid
-                            ? 'El valor pagado se guardara en recibos y consumos.'
+                            ? 'El valor pagado afectara la cuenta del usuario. Si supera el recibo queda como saldo a favor; si es menor queda saldo en mora.'
                             : 'Activa el pago para registrar el valor recibido.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),

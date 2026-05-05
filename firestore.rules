@@ -177,6 +177,12 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    match /cuentas_movimientos/{movimientoId} {
+      allow read: if isAdmin() || isContador();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
     match /consumos_conflictos/{conflictoId} {
       allow create: if canManageConsumptions();
       allow read: if isAdmin() ||

@@ -578,8 +578,12 @@ class _SuspensionCard extends StatelessWidget {
                 'Periodo: ${invoice.periodo} · Total a pagar: ${_formatCurrency(invoice.totalAPagar)}',
               ),
               const SizedBox(height: 6),
-              if (invoice.saldoAnterior > 0)
-                Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
+              if (invoice.saldoAnterior != 0)
+                Text(
+                  invoice.saldoAnterior < 0
+                      ? 'Saldo a favor: ${_formatCurrency(invoice.saldoAnterior.abs())}'
+                      : 'Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}',
+                ),
               const SizedBox(height: 6),
               Text(
                 'Estado de cartera: $statusText',

@@ -198,9 +198,9 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
         title: 'Cuentas',
         screens: [
           const _AdminScreen(title: 'Cuentas', child: AccountsOverviewPage()),
-          const _AdminScreen(
+          _AdminScreen(
             title: 'Registrar pagos',
-            child: AccountPaymentsPage(),
+            child: AccountPaymentsPage(currentUser: widget.currentUser),
           ),
           _AdminScreen(
             title: 'Extraordinarios',

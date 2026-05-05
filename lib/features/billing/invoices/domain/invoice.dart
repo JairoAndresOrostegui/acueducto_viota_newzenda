@@ -149,7 +149,9 @@ class Invoice {
   final String? avisoFacturacion;
   final String? mensaje;
 
-  int get totalAPagar => total + saldoAnterior + reconexion;
+  int get currentChargeTotal => total + reconexion;
+
+  int get totalAPagar => math.max(total + saldoAnterior + reconexion, 0);
 
   int get saldoPendiente =>
       math.max(totalAPagar - (valorPagado ?? 0), 0);
@@ -250,6 +252,7 @@ class Invoice {
     String? estado,
     bool? pagado,
     int? valorPagado,
+    int? saldoAnterior,
     Object? avisoFacturacion = _sentinel,
     Object? fechaPago = _sentinel,
     Object? medioPagoId = _sentinel,
@@ -270,7 +273,7 @@ class Invoice {
       fechaVencimiento: fechaVencimiento,
       cargoFijo: cargoFijo,
       reconexion: reconexion,
-      saldoAnterior: saldoAnterior,
+      saldoAnterior: saldoAnterior ?? this.saldoAnterior,
       lineas: lineas,
       mediosPagoTexto: mediosPagoTexto,
       mediosPago: mediosPago,

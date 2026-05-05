@@ -1,7 +1,5 @@
 import 'dart:typed_data';
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' as xls;
 
@@ -48,7 +46,7 @@ class _ConsumptionReportsAdminPageState
   int get _pendingAmount {
     return _pendingInvoices.fold<int>(
       0,
-      (sum, invoice) => sum + math.max(invoice.total - (invoice.valorPagado ?? 0), 0),
+      (sum, invoice) => sum + invoice.saldoPendiente,
     );
   }
 
@@ -134,7 +132,7 @@ class _ConsumptionReportsAdminPageState
             itemBuilder: (context, index) {
               final invoice = _pendingInvoices[index];
               final paid = invoice.valorPagado ?? 0;
-              final pending = math.max(invoice.total - paid, 0);
+              final pending = invoice.saldoPendiente;
               return Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -160,7 +158,7 @@ class _ConsumptionReportsAdminPageState
                     const SizedBox(height: 4),
                     Text('Vencimiento: ${_formatDate(invoice.fechaVencimiento)}'),
                     const SizedBox(height: 8),
-                    Text('Total facturado: ${_formatCurrency(invoice.total)}'),
+                    Text('Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'),
                     const SizedBox(height: 4),
                     Text('Valor registrado: ${_formatCurrency(paid)}'),
                     const SizedBox(height: 4),

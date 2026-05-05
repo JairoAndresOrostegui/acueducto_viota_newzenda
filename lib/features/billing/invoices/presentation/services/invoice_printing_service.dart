@@ -356,7 +356,10 @@ class _ReceiptPage extends pw.StatelessWidget {
                   'VALOR ADICIONAL',
                   _formatCurrency(additionalValue),
                 ),
-              _summaryRow('SALDO ANTERIOR', _formatCurrency(invoice.saldoAnterior)),
+              _summaryRow(
+                invoice.saldoAnterior < 0 ? 'SALDO A FAVOR' : 'SALDO ANTERIOR',
+                _formatCurrency(invoice.saldoAnterior),
+              ),
               _summaryRow('RECONEXIÓN', _formatCurrency(invoice.reconexion)),
               _summaryRow(
                 'TOTAL A PAGAR',

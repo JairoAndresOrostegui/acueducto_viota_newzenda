@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../consumptions/domain/consumption_reading.dart';
+import '../../../accounts/data/account_movement_firestore_service.dart';
 import '../../../users/data/user_firestore_service.dart';
 import '../../../users/domain/app_user.dart';
 import '../../observations/data/billing_observation_firestore_service.dart';
@@ -26,15 +27,20 @@ class InvoiceFirestoreService {
   InvoiceFirestoreService({
     FirebaseFirestore? firestore,
     BillingObservationFirestoreService? observationService,
+    AccountMovementFirestoreService? accountMovementService,
     UserFirestoreService? userService,
   }) : _firestore = firestore,
        _observationService =
            observationService ??
            BillingObservationFirestoreService(firestore: firestore),
+       _accountMovementService =
+           accountMovementService ??
+           AccountMovementFirestoreService(firestore: firestore),
        _userService = userService ?? UserFirestoreService(firestore: firestore);
 
   final FirebaseFirestore? _firestore;
   final BillingObservationFirestoreService _observationService;
+  final AccountMovementFirestoreService _accountMovementService;
   final UserFirestoreService _userService;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
@@ -190,6 +196,11 @@ class InvoiceFirestoreService {
     );
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
+    final accountBalancesByCode = await _accountMovementService
+        .fetchBalancesBeforePeriod(
+          periodId: period.id,
+          customerCodes: readings.map((item) => item.codigoUsuario),
+        );
 
     final batch = _db.batch();
     for (final reading in readings) {
@@ -204,6 +215,9 @@ class InvoiceFirestoreService {
         generatedAt: now,
         dueDate: dueDate,
         previousInvoices: previousInvoices,
+        accountBalance: accountBalancesByCode[
+          _normalizeUserCode(reading.codigoUsuario)
+        ],
         sector:
             usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
             '',
@@ -218,6 +232,12 @@ class InvoiceFirestoreService {
         _periodInvoices(period.id).doc(invoice.id),
         invoice.toFirestore(),
         SetOptions(merge: true),
+      );
+      _accountMovementService.setInvoiceCharge(
+        batch: batch,
+        invoice: invoice,
+        actor: actor,
+        createdAt: now,
       );
       batch.set(
         _periodConsumptions(period.id).doc(reading.codigoContador),
@@ -238,16 +258,24 @@ class InvoiceFirestoreService {
   Future<void> updatePaymentStatus({
     required Invoice invoice,
     required bool paid,
+    required AppUser actor,
     int? paidAmount,
     PaymentMethod? paymentMethod,
     String? observations,
   }) async {
     _ensureAccountingPeriod(invoice.periodo);
+    final previousPaidAmount = invoice.valorPagado ?? 0;
+    final newPaidAmount = paid ? (paidAmount ?? invoice.totalAPagar) : 0;
+    final newStatus = _resolvePaymentStatus(
+      invoice: invoice,
+      paidAmount: newPaidAmount,
+    );
+    final paidAt = DateTime.now();
     final updated = invoice.copyWith(
-      estado: paid ? 'pagado' : 'facturado',
-      pagado: paid,
-      valorPagado: paid ? (paidAmount ?? invoice.totalAPagar) : 0,
-      fechaPago: paid ? DateTime.now() : null,
+      estado: newStatus,
+      pagado: newPaidAmount >= invoice.totalAPagar && invoice.totalAPagar > 0,
+      valorPagado: newPaidAmount,
+      fechaPago: newPaidAmount > 0 ? paidAt : null,
       medioPagoId: paid ? paymentMethod?.id : null,
       medioPagoDescripcion: paid ? paymentMethod?.descripcion : null,
       observacionesPago: paid && (observations?.trim().isNotEmpty ?? false)
@@ -256,6 +284,20 @@ class InvoiceFirestoreService {
     );
 
     final batch = _db.batch();
+    _accountMovementService.setInvoiceCharge(
+      batch: batch,
+      invoice: invoice,
+      actor: actor,
+    );
+    _accountMovementService.addPaymentDelta(
+      batch: batch,
+      invoice: invoice,
+      deltaPaidAmount: newPaidAmount - previousPaidAmount,
+      actor: actor,
+      paymentMethod: paymentMethod,
+      observations: observations,
+      paidAt: paidAt,
+    );
     batch.set(
       _periodInvoices(invoice.periodo).doc(invoice.id),
       updated.toFirestore(),
@@ -264,11 +306,13 @@ class InvoiceFirestoreService {
     batch.set(
       _periodConsumptions(invoice.periodo).doc(invoice.codigoContador),
       {
-        'pagado': paid,
-        'estado': paid ? 'pagado' : 'facturado',
+        'pagado': updated.pagado,
+        'estado': newStatus,
         'reciboId': invoice.id,
-        'valorPagado': paid ? (paidAmount ?? invoice.totalAPagar) : 0,
-        'fechaPago': paid ? Timestamp.fromDate(updated.fechaPago!) : null,
+        'valorPagado': newPaidAmount,
+        'fechaPago': updated.fechaPago == null
+            ? null
+            : Timestamp.fromDate(updated.fechaPago!),
         'medioPagoId': paid ? paymentMethod?.id : null,
         'medioPagoDescripcion': paid ? paymentMethod?.descripcion : null,
         'observacionesPago': paid && (observations?.trim().isNotEmpty ?? false)
@@ -377,6 +421,13 @@ class InvoiceFirestoreService {
     );
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
+    final accountBalancesByCode = await _accountMovementService
+        .fetchBalancesBeforePeriod(
+          periodId: period.id,
+          customerCodes: readingsByMeter.values.map(
+            (item) => item.codigoUsuario,
+          ),
+        );
 
     var regeneratedCount = 0;
     var skippedPaidCount = 0;
@@ -402,6 +453,9 @@ class InvoiceFirestoreService {
         generatedAt: now,
         dueDate: dueDate,
         previousInvoices: previousInvoices,
+        accountBalance: accountBalancesByCode[
+          _normalizeUserCode(reading.codigoUsuario)
+        ],
         sector:
             usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
             '',
@@ -417,6 +471,12 @@ class InvoiceFirestoreService {
         _periodInvoices(period.id).doc(invoice.id),
         invoice.toFirestore(),
         SetOptions(merge: true),
+      );
+      _accountMovementService.setInvoiceCharge(
+        batch: batch,
+        invoice: invoice,
+        actor: actor,
+        createdAt: now,
       );
       batch.set(
         _periodConsumptions(period.id).doc(reading.codigoContador),
@@ -475,6 +535,11 @@ class InvoiceFirestoreService {
     final previousInvoicesByMeter = await _fetchPreviousInvoiceHistoryByMeter(
       period,
     );
+    final accountBalancesByCode = await _accountMovementService
+        .fetchBalancesBeforePeriod(
+          periodId: period.id,
+          customerCodes: [reading.codigoUsuario],
+        );
     final previousInvoices =
         previousInvoicesByMeter[reading.codigoContador] ?? const <Invoice>[];
     final invoice = _buildInvoice(
@@ -486,6 +551,8 @@ class InvoiceFirestoreService {
       generatedAt: now,
       dueDate: dueDate,
       previousInvoices: previousInvoices,
+      accountBalance:
+          accountBalancesByCode[_normalizeUserCode(reading.codigoUsuario)],
       sector:
           usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
       appliedObservations: _resolveAppliedObservations(
@@ -502,6 +569,12 @@ class InvoiceFirestoreService {
       _periodInvoices(period.id).doc(invoice.id),
       invoice.toFirestore(),
       SetOptions(merge: true),
+    );
+    _accountMovementService.setInvoiceCharge(
+      batch: batch,
+      invoice: invoice,
+      actor: actor,
+      createdAt: now,
     );
     batch.set(
       _periodConsumptions(period.id).doc(invoice.codigoContador),
@@ -525,6 +598,7 @@ class InvoiceFirestoreService {
     required DateTime generatedAt,
     required DateTime dueDate,
     required List<Invoice> previousInvoices,
+    required int? accountBalance,
     required String sector,
     required List<InvoiceAppliedObservation> appliedObservations,
     required AppUser actor,
@@ -561,6 +635,11 @@ class InvoiceFirestoreService {
       lineItems: lineItems,
       total: subtotal,
     );
+    final previousBalance = _resolvePreviousBalance(
+      previousInvoice: previousInvoice,
+      accountBalance: accountBalance,
+    );
+    final isCoveredByCredit = subtotal + previousBalance <= 0;
 
     return Invoice(
       id: reading.codigoContador,
@@ -576,15 +655,17 @@ class InvoiceFirestoreService {
       fechaVencimiento: dueDate,
       cargoFijo: values.cargoFijo,
       reconexion: 0,
-      saldoAnterior: _resolvePreviousBalance(previousInvoice),
+      saldoAnterior: previousBalance,
       lineas: lineItems,
       mediosPagoTexto: paymentText,
       mediosPago: paymentLines,
-      estado: _resolveCurrentInvoiceStatus(previousInvoices, existingInvoice),
+      estado: isCoveredByCredit
+          ? 'pagado'
+          : _resolveCurrentInvoiceStatus(previousInvoices, existingInvoice),
       valorConfigId: values.id,
       valorConfigVersion: values.version,
       total: subtotal,
-      pagado: false,
+      pagado: isCoveredByCredit,
       valorPagado: 0,
       actorUid: actor.uid,
       actorNombre: actor.nombre,
@@ -730,12 +811,34 @@ class InvoiceFirestoreService {
     return true;
   }
 
-  int _resolvePreviousBalance(Invoice? previousInvoice) {
+  int _resolvePreviousBalance({
+    required Invoice? previousInvoice,
+    required int? accountBalance,
+  }) {
+    if (accountBalance != null && accountBalance != 0) {
+      return accountBalance;
+    }
     if (previousInvoice == null ||
         !_isAccountingPeriodId(previousInvoice.periodo)) {
       return 0;
     }
     return previousInvoice.saldoPendiente;
+  }
+
+  String _resolvePaymentStatus({
+    required Invoice invoice,
+    required int paidAmount,
+  }) {
+    if (paidAmount >= invoice.totalAPagar && invoice.totalAPagar > 0) {
+      return 'pagado';
+    }
+    if (invoice.estaSuspendido) {
+      return 'suspendido';
+    }
+    if (paidAmount > 0) {
+      return 'en_mora';
+    }
+    return 'facturado';
   }
 
   Future<List<String>> _fetchPreviousBillablePeriodIds(

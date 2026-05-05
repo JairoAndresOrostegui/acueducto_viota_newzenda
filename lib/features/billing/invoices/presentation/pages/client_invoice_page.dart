@@ -221,10 +221,16 @@ class _ClientInvoiceCard extends StatelessWidget {
                 value: '${invoice.lecturaActual}',
               ),
               _LabelValue(label: 'Consumo m³', value: '${invoice.consumoM3}'),
-              if (invoice.saldoAnterior > 0)
+              if (invoice.saldoAnterior != 0)
                 _LabelValue(
-                  label: 'Saldo anterior',
-                  value: _formatCurrency(invoice.saldoAnterior),
+                  label: invoice.saldoAnterior < 0
+                      ? 'Saldo a favor'
+                      : 'Saldo anterior',
+                  value: _formatCurrency(
+                    invoice.saldoAnterior < 0
+                        ? invoice.saldoAnterior.abs()
+                        : invoice.saldoAnterior,
+                  ),
                 ),
             ],
           ),
