@@ -13,6 +13,7 @@ const ROLE_COLLECTION = 'roles';
 const SECTOR_COLLECTION = 'sectores';
 const PERIOD_COLLECTION = 'periodos';
 const MIN_CONSUMPTION_HISTORY_PERIOD = '2025-12';
+const ACCOUNT_MOVEMENT_COLLECTION = 'cuentas_movimientos';
 
 async function getAdminProfile(uid) {
   const snapshot = await db.collection(USER_COLLECTION).doc(uid).get();
@@ -535,6 +536,49 @@ async function writeUserLog({
   });
 }
 
+async function commitBatchOperation(state, operation) {
+  operation(state.batch);
+  state.writes++;
+  if (state.writes >= 400) {
+    await state.batch.commit();
+    state.batch = db.batch();
+    state.writes = 0;
+  }
+}
+
+async function flushBatchOperation(state) {
+  if (state.writes > 0) {
+    await state.batch.commit();
+    state.batch = db.batch();
+    state.writes = 0;
+  }
+}
+
+function clientCodePairsFromUser(data) {
+  const rawPairs = Array.isArray(data.codigosUsuario) ? data.codigosUsuario : [];
+  return rawPairs
+    .map((item) => ({
+      codigoUsuario: normalizeOptionalString(item?.codigoUsuario).toUpperCase(),
+      numeroContador: normalizeOptionalString(item?.numeroContador).toUpperCase(),
+      sector: normalizeOptionalString(item?.sector),
+    }))
+    .filter((item) => item.codigoUsuario && item.codigoUsuario !== 'NA');
+}
+
+async function deleteQueryDocuments(query, state, visitedPaths) {
+  const snapshot = await query.get();
+  let count = 0;
+  for (const doc of snapshot.docs) {
+    if (visitedPaths.has(doc.ref.path)) {
+      continue;
+    }
+    visitedPaths.add(doc.ref.path);
+    await commitBatchOperation(state, (batch) => batch.delete(doc.ref));
+    count++;
+  }
+  return count;
+}
+
 function normalizeLowercaseOrStorageValue(value, field, allowEmptyFields) {
   if (!allowEmptyFields) {
     return normalizeLowercase(value, field);
@@ -876,6 +920,147 @@ exports.deleteManagedUser = onCall({ cors: true, invoker: 'public' }, async (req
 
   return { uid };
 });
+
+exports.resetClientAccountData = onCall(
+  { cors: true, invoker: 'public', timeoutSeconds: 540 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Debes iniciar sesion.');
+    }
+
+    const actor = await getAdminProfile(request.auth.uid);
+    if (!actor.superAdmin) {
+      throw new HttpsError(
+        'permission-denied',
+        'Solo un super administrador puede limpiar datos de prueba.',
+      );
+    }
+
+    const uid = normalizeString(request.data?.uid, 'uid');
+    const userRef = db.collection(USER_COLLECTION).doc(uid);
+    const existing = await userRef.get();
+    if (!existing.exists) {
+      throw new HttpsError('not-found', 'El perfil no existe en Firestore.');
+    }
+
+    const userData = existing.data();
+    if (userData.rol !== 'cliente') {
+      throw new HttpsError(
+        'failed-precondition',
+        'La limpieza de cuentas solo aplica para usuarios cliente.',
+      );
+    }
+
+    const pairs = clientCodePairsFromUser(userData);
+    const codes = [...new Set(pairs.map((item) => item.codigoUsuario))];
+    const meters = [
+      ...new Set(
+        pairs
+          .map((item) => item.numeroContador)
+          .filter((item) => item && item !== 'NA'),
+      ),
+    ];
+
+    if (codes.length === 0 && meters.length === 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'El usuario no tiene codigos o contadores para limpiar.',
+      );
+    }
+
+    const state = { batch: db.batch(), writes: 0 };
+    const deletedInvoicePaths = new Set();
+    const deletedMovementPaths = new Set();
+    let deletedInvoices = 0;
+    let deletedMovements = 0;
+    let resetConsumptions = 0;
+
+    for (const code of codes) {
+      deletedInvoices += await deleteQueryDocuments(
+        db.collectionGroup('recibos').where('codigoUsuario', '==', code),
+        state,
+        deletedInvoicePaths,
+      );
+      deletedMovements += await deleteQueryDocuments(
+        db.collection(ACCOUNT_MOVEMENT_COLLECTION).where('codigoUsuario', '==', code),
+        state,
+        deletedMovementPaths,
+      );
+    }
+
+    for (const meter of meters) {
+      deletedInvoices += await deleteQueryDocuments(
+        db.collectionGroup('recibos').where('codigoContador', '==', meter),
+        state,
+        deletedInvoicePaths,
+      );
+      deletedMovements += await deleteQueryDocuments(
+        db.collection(ACCOUNT_MOVEMENT_COLLECTION).where('codigoContador', '==', meter),
+        state,
+        deletedMovementPaths,
+      );
+    }
+
+    const periodsSnapshot = await db.collection(PERIOD_COLLECTION).get();
+    const periods = periodsSnapshot.docs.map((doc) => doc.id).sort();
+    const deleteField = admin.firestore.FieldValue.delete();
+    for (const period of periods) {
+      for (const meter of meters) {
+        const consumptionRef = db
+          .collection(PERIOD_COLLECTION)
+          .doc(period)
+          .collection('consumos')
+          .doc(meter);
+        const consumption = await consumptionRef.get();
+        if (!consumption.exists) {
+          continue;
+        }
+        await commitBatchOperation(state, (batch) => batch.set(
+          consumptionRef,
+          {
+            facturado: false,
+            pagado: false,
+            estado: 'sincronizado',
+            reciboId: deleteField,
+            valorPagado: deleteField,
+            fechaPago: deleteField,
+            medioPagoId: deleteField,
+            medioPagoDescripcion: deleteField,
+            observacionesPago: deleteField,
+            detalleEstado: deleteField,
+            observacionesAdmin: deleteField,
+          },
+          { merge: true },
+        ));
+        resetConsumptions++;
+      }
+    }
+
+    await flushBatchOperation(state);
+
+    await writeUserLog({
+      action: 'limpieza_cuenta_cliente',
+      actor,
+      targetUid: uid,
+      targetName: userData.nombre ?? uid,
+      previousData: sanitizeUserPayload(userData),
+      newData: {
+        codigosUsuario: codes,
+        numeroContador: meters,
+        recibosEliminados: deletedInvoices,
+        movimientosEliminados: deletedMovements,
+        consumosRestablecidos: resetConsumptions,
+      },
+    });
+
+    return {
+      uid,
+      deletedInvoices,
+      deletedMovements,
+      resetConsumptions,
+    };
+  },
+);
 
 exports.signInWithClientCode = onCall({ cors: true, invoker: 'public' }, async (request) => {
   try {

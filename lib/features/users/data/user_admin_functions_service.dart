@@ -65,6 +65,16 @@ class UserAdminFunctionsService {
     await callable.call({'uid': uid});
   }
 
+  Future<UserAccountResetSummary> resetClientAccountData(String uid) async {
+    final callable = _client.httpsCallable(
+      'resetClientAccountData',
+      options: HttpsCallableOptions(timeout: const Duration(minutes: 10)),
+    );
+    final result = await callable.call({'uid': uid});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return UserAccountResetSummary.fromMap(data);
+  }
+
   Future<UserImportSummary> importMigratedUsers(
     List<Map<String, String>> rows,
   ) async {
@@ -87,6 +97,26 @@ class UserAdminFunctionsService {
     final result = await callable.call({'rows': rows});
     final data = Map<String, dynamic>.from(result.data as Map);
     return UserImportSummary.fromMap(data);
+  }
+}
+
+class UserAccountResetSummary {
+  const UserAccountResetSummary({
+    required this.deletedInvoices,
+    required this.deletedMovements,
+    required this.resetConsumptions,
+  });
+
+  final int deletedInvoices;
+  final int deletedMovements;
+  final int resetConsumptions;
+
+  factory UserAccountResetSummary.fromMap(Map<String, dynamic> data) {
+    return UserAccountResetSummary(
+      deletedInvoices: data['deletedInvoices'] as int? ?? 0,
+      deletedMovements: data['deletedMovements'] as int? ?? 0,
+      resetConsumptions: data['resetConsumptions'] as int? ?? 0,
+    );
   }
 }
 

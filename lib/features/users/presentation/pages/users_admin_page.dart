@@ -213,7 +213,11 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
                               canDelete:
                                   user.uid != widget.currentUser.uid &&
                                   user.rol != 'administrador',
+                              canResetAccount:
+                                  widget.currentUser.superAdmin &&
+                                  user.rol == 'cliente',
                               onEdit: () => _openForm(user: user),
+                              onResetAccount: () => _confirmResetAccount(user),
                               onDelete: () => _confirmDelete(user),
                             );
                           },
@@ -627,6 +631,102 @@ class _UsersAdminPageState extends State<UsersAdminPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No fue posible eliminar: $error')),
       );
+    }
+  }
+
+  Future<void> _confirmResetAccount(AppUser user) async {
+    final confirmationController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final canConfirm =
+                confirmationController.text.trim().toUpperCase() == 'LIMPIAR';
+            return AlertDialog(
+              title: const Text('Limpiar datos de cuenta'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Se limpiaran recibos, pagos, saldos, movimientos de cuenta y estados derivados de ${toDisplayUserName(user.nombre)}.',
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'El usuario y sus consumos registrados se conservaran. Los consumos quedaran como lecturas normales sin facturacion ni pago.',
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Esta accion es solo para pruebas y no se puede deshacer.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: confirmationController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      labelText: 'Escribe LIMPIAR para confirmar',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: canConfirm
+                      ? () => Navigator.of(context).pop(true)
+                      : null,
+                  child: const Text('Limpiar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    confirmationController.dispose();
+
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final summary = await _adminFunctionsService.resetClientAccountData(
+        user.uid,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Limpieza finalizada: ${summary.deletedInvoices} recibos, ${summary.deletedMovements} movimientos y ${summary.resetConsumptions} consumos restablecidos.',
+          ),
+        ),
+      );
+      await _loadUsers(pageIndex: _isSearching ? 0 : _currentPageIndex);
+      await _loadUserMetrics();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final message = switch (error) {
+        FirebaseFunctionsException _ =>
+          error.message ?? error.details?.toString() ?? error.code,
+        _ => error.toString(),
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No fue posible limpiar la cuenta: $message')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 }
@@ -1711,13 +1811,17 @@ class _UserCard extends StatelessWidget {
   const _UserCard({
     required this.user,
     required this.canDelete,
+    required this.canResetAccount,
     required this.onEdit,
+    required this.onResetAccount,
     required this.onDelete,
   });
 
   final AppUser user;
   final bool canDelete;
+  final bool canResetAccount;
   final VoidCallback onEdit;
+  final VoidCallback onResetAccount;
   final VoidCallback onDelete;
 
   @override
@@ -1770,6 +1874,16 @@ class _UserCard extends StatelessWidget {
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
               ),
+              if (canResetAccount)
+                OutlinedButton.icon(
+                  onPressed: onResetAccount,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    foregroundColor: Colors.orange.shade900,
+                  ),
+                  icon: const Icon(Icons.cleaning_services_rounded),
+                  label: const Text('Limpiar cuenta'),
+                ),
               if (canDelete)
                 OutlinedButton.icon(
                   onPressed: onDelete,
