@@ -976,11 +976,6 @@ exports.resetClientAccountData = onCall(
     let resetConsumptions = 0;
 
     for (const code of codes) {
-      deletedInvoices += await deleteQueryDocuments(
-        db.collectionGroup('recibos').where('codigoUsuario', '==', code),
-        state,
-        deletedInvoicePaths,
-      );
       deletedMovements += await deleteQueryDocuments(
         db.collection(ACCOUNT_MOVEMENT_COLLECTION).where('codigoUsuario', '==', code),
         state,
@@ -989,11 +984,6 @@ exports.resetClientAccountData = onCall(
     }
 
     for (const meter of meters) {
-      deletedInvoices += await deleteQueryDocuments(
-        db.collectionGroup('recibos').where('codigoContador', '==', meter),
-        state,
-        deletedInvoicePaths,
-      );
       deletedMovements += await deleteQueryDocuments(
         db.collection(ACCOUNT_MOVEMENT_COLLECTION).where('codigoContador', '==', meter),
         state,
@@ -1005,7 +995,26 @@ exports.resetClientAccountData = onCall(
     const periods = periodsSnapshot.docs.map((doc) => doc.id).sort();
     const deleteField = admin.firestore.FieldValue.delete();
     for (const period of periods) {
+      const invoiceCollection = db
+        .collection(PERIOD_COLLECTION)
+        .doc(period)
+        .collection('recibos');
+      for (const code of codes) {
+        deletedInvoices += await deleteQueryDocuments(
+          invoiceCollection.where('codigoUsuario', '==', code),
+          state,
+          deletedInvoicePaths,
+        );
+      }
       for (const meter of meters) {
+        const invoiceRef = invoiceCollection.doc(meter);
+        const invoice = await invoiceRef.get();
+        if (invoice.exists && !deletedInvoicePaths.has(invoiceRef.path)) {
+          deletedInvoicePaths.add(invoiceRef.path);
+          await commitBatchOperation(state, (batch) => batch.delete(invoiceRef));
+          deletedInvoices++;
+        }
+
         const consumptionRef = db
           .collection(PERIOD_COLLECTION)
           .doc(period)
