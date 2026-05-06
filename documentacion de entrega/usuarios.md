@@ -2,20 +2,22 @@
 
 ## Alcance
 
-Ruta de acceso para administrador:
+Ruta:
 
 - `Panel principal > Usuarios`
 
-Pantallas implementadas:
+Pantallas:
 
 1. `Usuarios`
 2. `Importar usuarios`
-3. `Tipos documento`
-4. `Roles`
+3. `Tipos documento`, visible solo para `superAdmin`
+4. `Roles`, visible solo para `superAdmin`
 5. `Sectores`
-6. `Logs`
+6. `Logs`, visible solo para `superAdmin`
 
-Servicios involucrados:
+## Servicios y backend
+
+Servicios Flutter:
 
 - `UserFirestoreService`
 - `UserAdminFunctionsService`
@@ -24,12 +26,17 @@ Servicios involucrados:
 - `SectorCatalogService`
 - `UserAuditLogService`
 
-Backend relacionado:
+Cloud Functions:
 
-- `functions/index.js`
-- Cloud Functions: `createManagedUser`, `updateManagedUser`, `deleteManagedUser`
+- `createManagedUser`
+- `updateManagedUser`
+- `deleteManagedUser`
+- `resetClientAccountData`
+- `importMigratedUsers`
+- `mergeClientUsersByDocument`
+- `normalizeImportedUserPlaceholders`
 
-Colecciones relacionadas:
+Colecciones:
 
 - `usuarios`
 - `usuarios_logs`
@@ -37,119 +44,102 @@ Colecciones relacionadas:
 - `roles`
 - `sectores`
 
-## Pantalla Usuarios
+## CRUD de usuarios
 
-Archivo principal:
+Archivo:
 
 - `lib/features/users/presentation/pages/users_admin_page.dart`
 
-### Objetivo
+El CRUD administra perfiles y delega operaciones sensibles a Cloud Functions. No escribe usuarios de Authentication directamente desde Flutter.
 
-Administrar usuarios del sistema y sus datos operativos.
+### Busquedas
 
-### Que muestra
+Permite buscar por:
 
-- Metricas de usuarios cargados, activos y clientes.
-- Busqueda por nombre, correo, rol, tipo cliente, documento, estado, contador o sector.
-- Tarjetas por usuario con acciones de editar y eliminar.
+- nombre
+- correo
+- rol
+- tipo cliente
+- documento
+- estado
+- codigo de usuario
+- contador
+- sector
 
-### Campos del formulario
+### Clientes con varios codigos
 
-- Correo
-- Nombre completo
-- Tipo de documento
-- Numero de documento
-- Numero de contacto
-- Rol
-- Tipo de cliente
-- Estado
-- Clave
-- Codigo de usuario
-- Numero de contador
-- Sector
+Un cliente puede tener varios registros en `codigosUsuario`. Cada registro contiene:
 
-### Reglas reales del formulario
+- `codigoUsuario`
+- `numeroContador`
+- `sector`
 
-- Solo se usan catalogos activos de tipos de documento, roles y sectores.
-- `correo` es obligatorio y se guarda en minuscula.
-- La clave es obligatoria al crear y debe tener minimo 8 caracteres.
-- El rol es obligatorio.
-- Si el rol es `cliente`:
-  - `codigoUsuario` es obligatorio y numerico.
-  - `numeroContador` es obligatorio.
-  - `sector` es obligatorio.
-  - `tipoCliente` debe ser `socio` o `suscriptor`.
-- Si el rol no es `cliente`, el formulario fuerza:
-  - `codigoUsuario = na`
-  - `numeroContador = NA`
-  - `tipoCliente = na`
-  - `sector = na`
-- El administrador autenticado no puede eliminarse a si mismo desde la lista.
+Tambien se mantiene `codigosUsuarioValores` para busquedas y reglas.
 
-### Validaciones de backend
+## Reglas del formulario
 
-Cloud Functions agrega validaciones adicionales:
+- Solo se usan catalogos activos.
+- Para usuarios internos se exige correo y clave temporal, salvo accion de `superAdmin` cuando aplique.
+- Para clientes se exige codigo de usuario, contador, sector y tipo de cliente, salvo flujo de `superAdmin` autorizado.
+- Al crear o actualizar, si el campo `superAdmin` no existe se conserva o se deja en `false` por defecto.
+- Los usuarios con rol administrador no pueden eliminar otros administradores.
+- La eliminacion exige escribir `ELIMINAR`.
+- El usuario autenticado no puede eliminarse a si mismo.
 
-- Solo administradores activos pueden gestionar usuarios.
-- El tipo de documento, rol y sector deben existir y estar activos.
-- El numero de documento no puede repetirse en otro usuario.
-- El correo no puede repetirse en Firebase Authentication.
-- Para clientes:
-  - `codigoUsuario` debe ser unico.
-  - cada contador debe ser unico.
-  - no se permiten contadores repetidos en el mismo usuario.
+## superAdmin
 
-### Flujo de crear usuario
+El campo `superAdmin = true` habilita funciones restringidas:
 
-1. Entrar a `Usuarios > Usuarios`.
-2. Presionar `Nuevo usuario`.
-3. Diligenciar los datos obligatorios.
-4. Si el rol es `cliente`, diligenciar codigo de usuario, contadores, tipo de cliente y sector.
-5. Guardar.
-6. El frontend llama `createManagedUser`.
-7. La funcion crea el usuario en Authentication y el perfil en `usuarios`.
+- ver `Tipos documento`, `Roles` y `Logs`;
+- omitir campos vacios en el CRUD cuando se necesite corregir/importar informacion;
+- ejecutar limpieza de cuenta de prueba para usuarios cliente.
 
-### Flujo de editar usuario
+Si el campo no existe en usuarios antiguos, el sistema lo interpreta como `false`.
 
-1. Buscar el usuario.
-2. Presionar `Editar`.
-3. Ajustar los datos.
-4. Si hace falta, ingresar una nueva clave.
-5. Guardar.
-6. El frontend llama `updateManagedUser`.
-7. La funcion actualiza Authentication y Firestore.
+## Limpieza de cuenta de prueba
 
-### Flujo de eliminar usuario
+Boton:
 
-1. Buscar el usuario.
-2. Presionar `Eliminar`.
-3. Confirmar la accion.
-4. El frontend llama `deleteManagedUser`.
-5. La funcion elimina el usuario administrado.
+- `Limpiar cuenta`
 
-### Casos de prueba recomendados
+Visibilidad:
 
-1. Crear un administrador activo.
-2. Crear un operador activo.
-3. Crear un cliente con varios contadores.
-4. Intentar crear cliente sin sectores activos.
-5. Intentar crear usuario con correo repetido.
-6. Intentar crear cliente con contador ya asignado a otro usuario.
-7. Editar un usuario y cambiar su estado.
-8. Cambiar la clave de un usuario existente.
-9. Intentar eliminar al usuario autenticado.
+- solo para usuario autenticado con `superAdmin = true`;
+- solo sobre usuarios con rol `cliente`.
 
-## Pantalla Importar usuarios
+Confirmacion:
 
-Archivo principal:
+- exige escribir `LIMPIAR`.
+
+Cloud Function:
+
+- `resetClientAccountData`
+
+La accion:
+
+- conserva el usuario;
+- conserva los consumos/lecturas;
+- borra recibos asociados a todos los codigos y contadores del usuario;
+- borra movimientos en `cuentas_movimientos`;
+- limpia campos derivados de pago/facturacion en consumos;
+- deja los consumos como lecturas normales `sincronizado`;
+- registra auditoria en `usuarios_logs`.
+
+No modifica:
+
+- datos principales del usuario;
+- codigos de usuario;
+- contadores;
+- sectores;
+- lecturas actuales o historicas.
+
+## Importar usuarios
+
+Archivo:
 
 - `lib/features/users/presentation/pages/users_import_page.dart`
 
-### Objetivo
-
-Importar usuarios cliente desde una plantilla Excel.
-
-### Columnas esperadas
+Columnas del importador principal:
 
 - `tipousuario`
 - `sector`
@@ -160,141 +150,24 @@ Importar usuarios cliente desde una plantilla Excel.
 - `nombre`
 - `correo`
 
-### Reglas reales
+Importacion/unificacion temporal para migracion:
 
-- El rol se guarda como `cliente`.
-- El estado se guarda como `activo`.
-- El tipo de documento se guarda como `cc`.
-- El correo se normaliza a minuscula.
-- El numero de contador y el codigo de usuario se normalizan a mayuscula.
-- La importacion usa Cloud Functions y respeta las validaciones de unicidad.
+- cabeceras esperadas: `sector`, `numcontador`, `codigousuario`, `documento`, `nombre`;
+- unifica clientes repetidos por documento;
+- deja un solo usuario con varios codigos, contadores y sectores;
+- no crea usuarios cliente en Authentication durante esa migracion.
 
-### Flujo
+## Logs
 
-1. Entrar a `Usuarios > Importar usuarios`.
-2. Descargar plantilla Excel.
-3. Diligenciar los registros.
-4. Seleccionar archivo.
-5. Revisar vista previa.
-6. Presionar `Importar registros`.
-7. Revisar resumen de importados y errores.
+Eventos esperados:
 
-## Pantalla Tipos documento
+- creacion
+- edicion
+- eliminacion
+- importacion
+- migracion/unificacion
+- limpieza de cuenta de prueba
 
-Archivo principal:
+## Estado
 
-- `lib/features/catalogs/presentation/pages/catalog_admin_page.dart`
-
-Servicio:
-
-- `DocumentTypeCatalogService`
-
-### Objetivo
-
-Administrar el catalogo usado por el formulario de usuarios.
-
-### Que muestra
-
-- Encabezado con descripcion.
-- Contador de registros filtrados y totales.
-- Busqueda por valor, nombre o estado.
-- Lista con acciones de editar y eliminar.
-
-### Reglas
-
-- `valor`, `nombre` y `estado` se normalizan a minuscula al guardar.
-- Solo los registros `activo` se usan fuera del modulo.
-
-### Flujo
-
-1. Presionar `Nuevo`.
-2. Diligenciar nombre visible y valor BD.
-3. Seleccionar estado.
-4. Guardar.
-
-## Pantalla Roles
-
-Archivo principal:
-
-- `lib/features/catalogs/presentation/pages/catalog_admin_page.dart`
-
-Servicio:
-
-- `RoleCatalogService`
-
-### Objetivo
-
-Administrar perfiles permitidos para usuarios gestionados.
-
-### Reglas
-
-- Solo roles `activo` se ofrecen en el formulario de usuarios.
-- El valor BD es el que gobierna la navegacion por rol en `HomePage`.
-
-### Roles observados en el codigo
-
-- `administrador`
-- `operador`
-- `cliente`
-- `contador`
-
-## Pantalla Sectores
-
-Archivo principal:
-
-- `lib/features/catalogs/presentation/pages/catalog_admin_page.dart`
-
-Servicio:
-
-- `SectorCatalogService`
-
-### Objetivo
-
-Administrar sectores asignables a clientes.
-
-### Reglas
-
-- Solo los sectores `activo` se muestran al crear o editar usuarios cliente.
-- El valor BD puede autogenerarse desde el nombre.
-- Los sectores no aplican a roles distintos de cliente.
-
-## Pantalla Logs
-
-Archivo principal:
-
-- `lib/features/users/presentation/pages/user_logs_page.dart`
-
-Servicio:
-
-- `UserAuditLogService`
-
-### Objetivo
-
-Consultar la auditoria de cambios sobre usuarios administrados.
-
-### Que muestra
-
-- Accion realizada.
-- Usuario afectado.
-- Responsable.
-- Fecha y hora.
-- Bloque `Anterior`.
-- Bloque `Nuevo`.
-
-### Reglas reales
-
-- La busqueda usa solo la primera palabra escrita.
-- El servicio devuelve hasta 50 registros.
-- El filtro trabaja con `searchTokens` almacenados en `usuarios_logs`.
-
-### Eventos esperados
-
-- Edicion de usuario.
-- Eliminacion de usuario.
-
-## Resumen funcional del modulo
-
-- El CRUD de usuarios no escribe directo a Authentication desde Flutter.
-- La gestion sensible depende de Cloud Functions.
-- Los catalogos y logs si operan directo contra Firestore.
-- El modulo esta operativo y coherente con el panel del administrador.
+El modulo queda operativo para usuarios simples, clientes con varios codigos, administracion restringida por `superAdmin`, auditoria y limpieza controlada de datos de prueba.

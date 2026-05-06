@@ -2,56 +2,76 @@
 
 ## Acceso
 
-El perfil `contador` inicia sesion normalmente, pero su acceso esta restringido a un unico flujo:
+El perfil `contador` inicia sesion normalmente y tiene acceso de consulta.
 
-- `Consumos > Reportes`
+Modulo principal:
 
-No puede entrar a:
+- `Reportes`
 
-- usuarios
-- registrar consumos
-- importar consumos
-- conflictos
-- registrar pagos
-- suspensiones
-- facturacion administrativa
+Pantallas:
 
-## Que puede consultar
+- `Facturacion`
+- `Consumos`
+- `Cartera`
 
-En la pantalla de reportes puede:
+No puede:
 
-- filtrar por periodo
-- filtrar por codigo de usuario
-- revisar solo irregularidades
-- ver lecturas consultadas
-- ver recibos pendientes
-- ver cartera pendiente
-- exportar el reporte de lecturas a CSV
+- administrar usuarios;
+- registrar consumos;
+- importar consumos;
+- resolver conflictos;
+- registrar pagos;
+- suspender usuarios;
+- generar o regenerar recibos;
+- modificar configuraciones.
 
-## Informe de cartera pendiente
+## Reporte Facturacion
 
-El informe muestra:
+Puede consultar:
 
-- cantidad de recibos pendientes
-- total de cartera pendiente
-- detalle por usuario
-- periodo del recibo
-- estado
-- vencimiento
-- total facturado
-- saldo anterior
-- valor registrado
-- saldo pendiente
+- recibos emitidos por periodo;
+- total facturado;
+- total a pagar;
+- valor pagado;
+- estados de recibo;
+- consumo m3 asociado;
+- valores adicionales;
+- saldo anterior o saldo a favor aplicado.
 
-## Limitaciones actuales
+Puede exportar Excel.
 
-- Tiene acceso de solo lectura.
-- No puede registrar pagos.
-- No puede editar consumos.
-- No puede generar ni regenerar recibos.
-- No puede suspender facturas.
-- No existe todavia un modulo contable financiero mas profundo por medio de pago, cierres o conciliaciones.
+## Reporte Consumos
+
+Puede consultar:
+
+- lecturas por periodo;
+- lectura anterior;
+- lectura actual;
+- consumo m3;
+- irregularidades;
+- estado de facturacion;
+- estado de pago.
+
+Puede exportar Excel.
+
+## Reporte Cartera
+
+Puede consultar:
+
+- cartera por periodo;
+- cartera consolidada de todos los periodos;
+- saldos pendientes;
+- saldos a favor;
+- pagos registrados;
+- usuarios suspendidos;
+- usuarios al dia o en mora.
+
+Puede exportar Excel.
+
+## Limitaciones
+
+El perfil es de solo lectura. No registra pagos ni modifica estados.
 
 ## Estado
 
-Para el alcance solicitado, el perfil `contador` queda funcional para reportes y cartera.
+El perfil `contador` queda funcional para revision de facturacion, consumos y cartera.
