@@ -81,6 +81,9 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _paymentMethods = paymentMethods
@@ -95,6 +98,9 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
         await _loadInvoices(_selectedPeriod!);
       }
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -104,6 +110,9 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
   }
 
   Future<void> _loadInvoices(BillingPeriod period) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -111,8 +120,14 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
     });
     try {
       final invoices = await _invoiceService.fetchInvoicesForPeriod(period.id);
+      if (!mounted) {
+        return;
+      }
       setState(() => _invoices = invoices);
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {

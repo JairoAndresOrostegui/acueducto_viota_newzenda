@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserPath() {
+      return /databases/(default)/documents/usuarios/$(request.auth.uid);
+    }
+
+    function currentUserData() {
+      return firestore.get(currentUserPath()).data;
+    }
+
+    function hasRole(role) {
+      return signedIn() &&
+          firestore.exists(currentUserPath()) &&
+          currentUserData().rol == role &&
+          currentUserData().estado == 'activo';
+    }
+
+    function isAdmin() {
+      return hasRole('administrador');
+    }
+
+    function isTesorero() {
+      return hasRole('tesorero');
+    }
+
+    match /gastos_soportes/{periodoId}/{fileName} {
+      allow read: if isAdmin() || isTesorero();
+      allow create: if (isAdmin() || isTesorero()) &&
+          request.resource.contentType == 'application/pdf' &&
+          request.resource.size < 20 * 1024 * 1024;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

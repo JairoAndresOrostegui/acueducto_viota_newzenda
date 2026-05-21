@@ -35,6 +35,7 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
+  bool _hasGenerated = false;
   String? _error;
   String _query = '';
   String _statusFilter = 'all';
@@ -67,14 +68,17 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _selectedPeriod = selected;
       });
-      if (selected != null) {
-        await _loadInvoices(selected);
-      }
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -84,6 +88,9 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
   }
 
   Future<void> _loadInvoices(BillingPeriod period) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -91,8 +98,17 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
     });
     try {
       final invoices = await _invoiceService.fetchInvoicesForPeriod(period.id);
-      setState(() => _invoices = invoices);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _invoices = invoices;
+        _hasGenerated = true;
+      });
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -104,7 +120,6 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
   @override
   Widget build(BuildContext context) {
     final rows = _filteredInvoices();
-    final compact = MediaQuery.sizeOf(context).width < 820;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -114,12 +129,17 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
           invoices: _invoices,
           statusFilter: _statusFilter,
           onPeriodChanged: (period) {
-            if (period != null) {
-              _loadInvoices(period);
-            }
+            setState(() {
+              _selectedPeriod = period;
+              _invoices = const [];
+              _hasGenerated = false;
+            });
           },
           onStatusChanged: (value) => setState(() => _statusFilter = value),
-          onExport: rows.isEmpty ? null : () => _export(rows),
+          onGenerate: _selectedPeriod == null
+              ? null
+              : () => _loadInvoices(_selectedPeriod!),
+          onExport: !_hasGenerated || rows.isEmpty ? null : () => _export(rows),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -139,20 +159,15 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : rows.isEmpty
-              ? Center(
+              : Center(
                   child: Text(
-                    _invoices.isEmpty
-                        ? 'No hay recibos generados para este periodo.'
-                        : 'No hay recibos que coincidan con el filtro.',
+                    !_hasGenerated
+                        ? 'Selecciona los filtros y genera el reporte.'
+                        : rows.isEmpty
+                        ? 'No hay recibos que coincidan con el filtro.'
+                        : 'Reporte generado. Puedes exportar el Excel.',
+                    textAlign: TextAlign.center,
                   ),
-                )
-              : ListView.separated(
-                  shrinkWrap: compact,
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) =>
-                      _InvoiceReportCard(invoice: rows[index]),
                 ),
         ),
       ],
@@ -207,28 +222,77 @@ class _BillingReportsPageState extends State<BillingReportsPage> {
       'fecha_generacion',
       'fecha_vencimiento',
     ].map(xls.TextCellValue.new).toList());
+    var totalConsumoM3 = 0;
+    var totalCargoFijo = 0;
+    var totalValorConsumo = 0;
+    var totalValoresAdicionales = 0;
+    var totalSaldoAnterior = 0;
+    var totalSaldoAFavorAplicado = 0;
+    var totalFacturado = 0;
+    var totalAPagar = 0;
+    var totalValorPagado = 0;
+    var totalSaldoPendiente = 0;
     for (final invoice in invoices) {
+      final consumptionAmount = _consumptionAmount(invoice);
+      final additionalAmount = _additionalAmount(invoice);
+      final previousDebt = invoice.saldoAnterior > 0
+          ? invoice.saldoAnterior
+          : 0;
+      final appliedCredit = invoice.saldoAnterior < 0
+          ? invoice.saldoAnterior.abs()
+          : 0;
+      final paidAmount = invoice.valorPagado ?? 0;
+      totalConsumoM3 += invoice.consumoM3;
+      totalCargoFijo += invoice.cargoFijo;
+      totalValorConsumo += consumptionAmount;
+      totalValoresAdicionales += additionalAmount;
+      totalSaldoAnterior += previousDebt;
+      totalSaldoAFavorAplicado += appliedCredit;
+      totalFacturado += invoice.currentChargeTotal;
+      totalAPagar += invoice.totalAPagar;
+      totalValorPagado += paidAmount;
+      totalSaldoPendiente += invoice.saldoPendiente;
       sheet.appendRow([
-        invoice.periodo,
-        invoice.codigoUsuario,
-        invoice.nombreUsuario,
-        invoice.sector,
-        invoice.codigoContador,
-        '${invoice.consumoM3}',
-        '${invoice.cargoFijo}',
-        '${_consumptionAmount(invoice)}',
-        '${_additionalAmount(invoice)}',
-        '${invoice.saldoAnterior > 0 ? invoice.saldoAnterior : 0}',
-        '${invoice.saldoAnterior < 0 ? invoice.saldoAnterior.abs() : 0}',
-        '${invoice.currentChargeTotal}',
-        '${invoice.totalAPagar}',
-        '${invoice.valorPagado ?? 0}',
-        '${invoice.saldoPendiente}',
-        invoice.estado,
-        _formatDate(invoice.fechaGeneracion),
-        _formatDate(invoice.fechaVencimiento),
-      ].map(xls.TextCellValue.new).toList());
+        xls.TextCellValue(invoice.periodo),
+        xls.TextCellValue(invoice.codigoUsuario),
+        xls.TextCellValue(invoice.nombreUsuario),
+        xls.TextCellValue(invoice.sector),
+        xls.TextCellValue(invoice.codigoContador),
+        xls.IntCellValue(invoice.consumoM3),
+        xls.IntCellValue(invoice.cargoFijo),
+        xls.IntCellValue(consumptionAmount),
+        xls.IntCellValue(additionalAmount),
+        xls.IntCellValue(previousDebt),
+        xls.IntCellValue(appliedCredit),
+        xls.IntCellValue(invoice.currentChargeTotal),
+        xls.IntCellValue(invoice.totalAPagar),
+        xls.IntCellValue(paidAmount),
+        xls.IntCellValue(invoice.saldoPendiente),
+        xls.TextCellValue(invoice.estado),
+        xls.TextCellValue(_formatDate(invoice.fechaGeneracion)),
+        xls.TextCellValue(_formatDate(invoice.fechaVencimiento)),
+      ]);
     }
+    sheet.appendRow([
+      xls.TextCellValue('TOTAL'),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.IntCellValue(totalConsumoM3),
+      xls.IntCellValue(totalCargoFijo),
+      xls.IntCellValue(totalValorConsumo),
+      xls.IntCellValue(totalValoresAdicionales),
+      xls.IntCellValue(totalSaldoAnterior),
+      xls.IntCellValue(totalSaldoAFavorAplicado),
+      xls.IntCellValue(totalFacturado),
+      xls.IntCellValue(totalAPagar),
+      xls.IntCellValue(totalValorPagado),
+      xls.IntCellValue(totalSaldoPendiente),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+    ]);
     excel.setDefaultSheet('facturacion');
     final bytes = excel.encode();
     if (bytes == null) {
@@ -255,6 +319,7 @@ class _Header extends StatelessWidget {
     required this.statusFilter,
     required this.onPeriodChanged,
     required this.onStatusChanged,
+    required this.onGenerate,
     required this.onExport,
   });
 
@@ -264,6 +329,7 @@ class _Header extends StatelessWidget {
   final String statusFilter;
   final ValueChanged<BillingPeriod?> onPeriodChanged;
   final ValueChanged<String> onStatusChanged;
+  final VoidCallback? onGenerate;
   final VoidCallback? onExport;
 
   @override
@@ -318,6 +384,11 @@ class _Header extends StatelessWidget {
               _Metric(label: 'Facturado', value: _formatCurrency(billed)),
               _Metric(label: 'Total a pagar', value: _formatCurrency(totalToPay)),
               _Metric(label: 'Pagado', value: _formatCurrency(paid)),
+              ElevatedButton.icon(
+                onPressed: onGenerate,
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Generar'),
+              ),
               OutlinedButton.icon(
                 onPressed: onExport,
                 icon: const Icon(Icons.download_rounded),
@@ -352,36 +423,6 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InvoiceReportCard extends StatelessWidget {
-  const _InvoiceReportCard({required this.invoice});
-
-  final Invoice invoice;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(toDisplayUserName(invoice.nombreUsuario), style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text('Codigo: ${invoice.codigoUsuario} - Contador: ${invoice.codigoContador} - Sector: ${toDisplayText(invoice.sector)}'),
-          const SizedBox(height: 6),
-          Text('Consumo: ${invoice.consumoM3} m3 - Facturado: ${_formatCurrency(invoice.currentChargeTotal)} - Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'),
-          const SizedBox(height: 6),
-          Text('Pagado: ${_formatCurrency(invoice.valorPagado ?? 0)} - Pendiente: ${_formatCurrency(invoice.saldoPendiente)} - Estado: ${toDisplayText(invoice.estado)}'),
         ],
       ),
     );

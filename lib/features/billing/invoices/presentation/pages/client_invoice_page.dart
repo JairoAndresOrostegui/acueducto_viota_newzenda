@@ -46,8 +46,14 @@ class _ClientInvoicePageState extends State<ClientInvoicePage> {
           .fetchLatestPayableInvoicesForClientCodes(
             widget.currentUser.codigosUsuario.map((item) => item.codigoUsuario),
           );
+      if (!mounted) {
+        return;
+      }
       setState(() => _invoices = invoices);
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {

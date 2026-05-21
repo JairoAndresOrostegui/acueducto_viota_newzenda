@@ -42,8 +42,9 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       _loadReferences();
 
   String _query = '';
-  String _scopeFilter = 'all';
+  String _scopeFilter = 'massive';
   String? _periodFilter;
+  bool _hasSearched = false;
   bool _saving = false;
 
   @override
@@ -57,8 +58,16 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       _periodService.fetchOperationalPeriods(),
       _userService.fetchActiveClients(limit: 5000),
     ]);
+    final periods = results[0] as List<BillingPeriod>;
+    if (mounted && _periodFilter == null && periods.isNotEmpty) {
+      final selected = periods.firstWhere(
+        (item) => item.vigente,
+        orElse: () => periods.first,
+      );
+      setState(() => _periodFilter = selected.id);
+    }
     return _ExtraordinaryReferences(
-      periods: results[0] as List<BillingPeriod>,
+      periods: periods,
       clients: results[1] as List<AppUser>,
     );
   }
@@ -96,7 +105,9 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
             final activeItem = snapshot.data;
             final values = activeItem?.valoresAdicionales ?? const [];
             final rows = _buildRows(values, references.clients);
-            final filteredRows = _filterRows(rows);
+            final filteredRows = _hasSearched
+                ? _filterRows(rows)
+                : const <_ExtraordinaryRow>[];
 
             return Stack(
               children: [
@@ -105,9 +116,9 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
                   children: [
                     _Header(
                       enabled: activeItem != null,
-                      totalCount: rows.length,
+                      totalCount: _hasSearched ? rows.length : 0,
                       filteredCount: filteredRows.length,
-                      totalAmount: _sum(values),
+                      totalAmount: _hasSearched ? _sum(values) : 0,
                       filteredAmount: _sum(
                         filteredRows.map((item) => item.value),
                       ),
@@ -134,11 +145,17 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
                       periodFilter: _periodFilter,
                       periods: references.periods,
                       onSearchChanged: (value) =>
-                          setState(() => _query = value),
+                          setState(() => _hasSearched = false),
+                      onSearch: _search,
                       onScopeChanged: (value) =>
-                          setState(() => _scopeFilter = value),
-                      onPeriodChanged: (value) =>
-                          setState(() => _periodFilter = value),
+                          setState(() {
+                            _scopeFilter = value;
+                            _hasSearched = false;
+                          }),
+                      onPeriodChanged: (value) => setState(() {
+                        _periodFilter = value;
+                        _hasSearched = false;
+                      }),
                     ),
                     const SizedBox(height: 16),
                     Expanded(
@@ -146,6 +163,12 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
                           ? const Center(
                               child: Text(
                                 'Primero crea una configuracion de valores activa.',
+                              ),
+                            )
+                          : !_hasSearched
+                          ? const Center(
+                              child: Text(
+                                'Selecciona los filtros y presiona Buscar.',
                               ),
                             )
                           : filteredRows.isEmpty
@@ -228,7 +251,8 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       if (_scopeFilter == 'individual' && row.value.isMassive) {
         return false;
       }
-      if ((_periodFilter ?? '').isNotEmpty &&
+      if (query.isEmpty &&
+          (_periodFilter ?? '').isNotEmpty &&
           row.value.periodoId != _periodFilter) {
         return false;
       }
@@ -237,6 +261,13 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       }
       return row.searchText.contains(query);
     }).toList();
+  }
+
+  void _search() {
+    setState(() {
+      _query = _searchController.text.trim();
+      _hasSearched = true;
+    });
   }
 
   Future<void> _openForm({
@@ -432,6 +463,7 @@ class _Filters extends StatelessWidget {
     required this.periodFilter,
     required this.periods,
     required this.onSearchChanged,
+    required this.onSearch,
     required this.onScopeChanged,
     required this.onPeriodChanged,
   });
@@ -442,6 +474,7 @@ class _Filters extends StatelessWidget {
   final String? periodFilter;
   final List<BillingPeriod> periods;
   final ValueChanged<String> onSearchChanged;
+  final VoidCallback onSearch;
   final ValueChanged<String> onScopeChanged;
   final ValueChanged<String?> onPeriodChanged;
 
@@ -456,25 +489,47 @@ class _Filters extends StatelessWidget {
       ),
       child: Column(
         children: [
-          TextField(
-            controller: searchController,
-            onChanged: onSearchChanged,
-            decoration: const InputDecoration(
-              labelText: 'Buscar por codigo, sector, nombre o concepto',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: searchController,
+                  onChanged: onSearchChanged,
+                  onSubmitted: (_) => onSearch(),
+                  decoration: const InputDecoration(
+                    labelText: 'Buscar por codigo, sector, nombre o concepto',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: onSearch,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 56),
+                ),
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Buscar'),
+              ),
+            ],
           ),
+          if (query.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'La busqueda se realiza en todos los periodos.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              ChoiceChip(
-                label: const Text('Todos'),
-                selected: scopeFilter == 'all',
-                onSelected: (_) => onScopeChanged('all'),
-              ),
               ChoiceChip(
                 label: const Text('Masivos'),
                 selected: scopeFilter == 'massive',
@@ -491,12 +546,8 @@ class _Filters extends StatelessWidget {
                   isExpanded: true,
                   initialValue: periodFilter,
                   decoration: const InputDecoration(labelText: 'Periodo'),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('Todos los periodos'),
-                    ),
-                    ...periods.map(
+                  items: periods
+                      .map(
                       (period) => DropdownMenuItem<String?>(
                         value: period.id,
                         child: Text(
@@ -504,8 +555,8 @@ class _Filters extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
+                    )
+                      .toList(),
                   onChanged: onPeriodChanged,
                 ),
               ),

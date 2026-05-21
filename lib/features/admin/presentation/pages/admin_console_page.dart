@@ -12,8 +12,13 @@ import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_import_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_suspensions_admin_page.dart';
 import 'package:frontacueductonewzenda/features/consumptions/presentation/pages/consumption_register_page.dart';
+import 'package:frontacueductonewzenda/features/expenses/presentation/pages/expense_concepts_page.dart';
+import 'package:frontacueductonewzenda/features/expenses/presentation/pages/expense_supports_page.dart';
+import 'package:frontacueductonewzenda/features/expenses/presentation/pages/expenses_page.dart';
 import 'package:frontacueductonewzenda/features/reports/presentation/pages/billing_reports_page.dart';
 import 'package:frontacueductonewzenda/features/reports/presentation/pages/consumption_reports_placeholder_page.dart';
+import 'package:frontacueductonewzenda/features/reports/presentation/pages/expense_reports_page.dart';
+import 'package:frontacueductonewzenda/features/reports/presentation/pages/extraordinary_reports_page.dart';
 import 'package:frontacueductonewzenda/features/reports/presentation/pages/portfolio_reports_page.dart';
 
 import '../../../../theme/app_colors.dart';
@@ -52,7 +57,7 @@ class AdminConsolePage extends StatefulWidget {
 
 class _AdminConsolePageState extends State<AdminConsolePage> {
   int _selectedModuleIndex = 0;
-  final List<int> _selectedScreenIndexes = [0, 0, 0, 0, 0];
+  final List<int> _selectedScreenIndexes = [0, 0, 0, 0, 0, 0];
 
   @override
   Widget build(BuildContext context) {
@@ -231,6 +236,23 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
         ],
       ),
       _AdminModule(
+        title: 'Gastos',
+        screens: [
+          _AdminScreen(
+            title: 'Conceptos',
+            child: ExpenseConceptsPage(currentUser: widget.currentUser),
+          ),
+          _AdminScreen(
+            title: 'Gastos',
+            child: ExpensesPage(currentUser: widget.currentUser),
+          ),
+          _AdminScreen(
+            title: 'Soportes',
+            child: ExpenseSupportsPage(currentUser: widget.currentUser),
+          ),
+        ],
+      ),
+      _AdminModule(
         title: 'Reportes',
         screens: const [
           _AdminScreen(
@@ -242,6 +264,11 @@ class _AdminConsolePageState extends State<AdminConsolePage> {
             child: ConsumptionReportsPlaceholderPage(),
           ),
           _AdminScreen(title: 'Cartera', child: PortfolioReportsPage()),
+          _AdminScreen(
+            title: 'Extraordinarios',
+            child: ExtraordinaryReportsPage(),
+          ),
+          _AdminScreen(title: 'Gastos', child: ExpenseReportsPage()),
         ],
       ),
     ];

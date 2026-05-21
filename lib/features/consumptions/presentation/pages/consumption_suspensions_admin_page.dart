@@ -69,6 +69,9 @@ class _ConsumptionSuspensionsAdminPageState
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _selectedPeriod = periods.contains(selected)
@@ -79,6 +82,9 @@ class _ConsumptionSuspensionsAdminPageState
         await _loadInvoices(_selectedPeriod!);
       }
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -88,6 +94,9 @@ class _ConsumptionSuspensionsAdminPageState
   }
 
   Future<void> _loadInvoices(BillingPeriod period) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -95,8 +104,14 @@ class _ConsumptionSuspensionsAdminPageState
     });
     try {
       final invoices = await _invoiceService.fetchInvoicesForPeriod(period.id);
+      if (!mounted) {
+        return;
+      }
       setState(() => _invoices = invoices);
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {

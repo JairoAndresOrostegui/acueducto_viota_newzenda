@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' as xls;
+import 'package:flutter/material.dart';
 
-import '../../../../core/presentation/text_formatters.dart';
 import '../../../../theme/app_colors.dart';
 import '../../../billing/invoices/data/invoice_firestore_service.dart';
 import '../../../billing/invoices/domain/invoice.dart';
+import '../../../billing/periods/data/billing_period_firestore_service.dart';
+import '../../../billing/periods/domain/billing_period.dart';
+import '../../../users/data/user_firestore_service.dart';
 import '../../data/consumption_firestore_service.dart';
 import '../../domain/consumption_reading.dart';
 import 'consumption_reports_file_exporter_stub.dart'
@@ -15,12 +17,16 @@ import 'consumption_reports_file_exporter_stub.dart'
 class ConsumptionReportsAdminPage extends StatefulWidget {
   const ConsumptionReportsAdminPage({
     super.key,
+    this.periodService,
     this.firestoreService,
     this.invoiceService,
+    this.userService,
   });
 
+  final BillingPeriodFirestoreService? periodService;
   final ConsumptionFirestoreService? firestoreService;
   final InvoiceFirestoreService? invoiceService;
+  final UserFirestoreService? userService;
 
   @override
   State<ConsumptionReportsAdminPage> createState() =>
@@ -29,381 +35,45 @@ class ConsumptionReportsAdminPage extends StatefulWidget {
 
 class _ConsumptionReportsAdminPageState
     extends State<ConsumptionReportsAdminPage> {
+  late final BillingPeriodFirestoreService _periodService =
+      widget.periodService ?? BillingPeriodFirestoreService();
   late final ConsumptionFirestoreService _firestoreService =
       widget.firestoreService ?? ConsumptionFirestoreService();
   late final InvoiceFirestoreService _invoiceService =
       widget.invoiceService ?? InvoiceFirestoreService();
+  late final UserFirestoreService _userService =
+      widget.userService ?? UserFirestoreService();
 
-  final TextEditingController _periodController = TextEditingController();
-  final TextEditingController _customerController = TextEditingController();
-
-  bool _loading = false;
-  bool _onlyIrregular = false;
-  List<ConsumptionReading> _items = const [];
-  List<Invoice> _pendingInvoices = const [];
-  Map<_InvoiceKey, Invoice> _invoicesByReading = const {};
-
-  int get _pendingAmount {
-    return _pendingInvoices.fold<int>(
-      0,
-      (sum, invoice) => sum + invoice.saldoPendiente,
-    );
-  }
+  bool _loading = true;
+  String? _error;
+  BillingPeriod? _selectedPeriod;
+  List<BillingPeriod> _periods = const [];
 
   @override
-  void dispose() {
-    _periodController.dispose();
-    _customerController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadPeriods();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
-    final highContrastTheme = baseTheme.copyWith(
-      textTheme: baseTheme.textTheme.apply(
-        bodyColor: Colors.black,
-        displayColor: Colors.black,
-      ),
-      inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
-        labelStyle: const TextStyle(color: Colors.black),
-        floatingLabelStyle: const TextStyle(color: Colors.black),
-        hintStyle: const TextStyle(color: Colors.black87),
-      ),
-    );
-    final compact = MediaQuery.sizeOf(context).width < 980;
-    final readingsList = _items.isEmpty
-        ? null
-        : ListView.separated(
-            shrinkWrap: compact,
-            physics: compact
-                ? const NeverScrollableScrollPhysics()
-                : const AlwaysScrollableScrollPhysics(),
-            itemCount: _items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final item = _items[index];
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${item.periodoActual} - ${toDisplayUserName(item.nombreUsuario)}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Usuario: ${item.codigoUsuario} - Contador: ${item.codigoContador}',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Lectura anterior: ${item.lecturaAnterior ?? '-'} - Lectura actual: ${item.lecturaActual} - Consumo: ${item.consumoCalculado ?? '-'}',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Estado: ${item.estado} - Facturado: ${item.facturado ? 'si' : 'no'} - Pagado: ${item.pagado ? 'si' : 'no'}',
-                    ),
-                    if (item.irregularidad != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Irregularidad: ${item.irregularidad!.tipo} - ${item.irregularidad!.descripcion}',
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
-          );
-    final pendingList = _pendingInvoices.isEmpty
-        ? null
-        : ListView.separated(
-            shrinkWrap: compact,
-            physics: compact
-                ? const NeverScrollableScrollPhysics()
-                : const AlwaysScrollableScrollPhysics(),
-            itemCount: _pendingInvoices.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final invoice = _pendingInvoices[index];
-              final paid = invoice.valorPagado ?? 0;
-              final pending = invoice.saldoPendiente;
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      toDisplayUserName(invoice.nombreUsuario),
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text('Usuario: ${invoice.codigoUsuario}'),
-                    const SizedBox(height: 4),
-                    Text('Contador: ${invoice.codigoContador}'),
-                    const SizedBox(height: 4),
-                    Text('Periodo: ${invoice.periodo}'),
-                    const SizedBox(height: 4),
-                    Text('Estado: ${toDisplayText(invoice.estado)}'),
-                    const SizedBox(height: 4),
-                    Text('Vencimiento: ${_formatDate(invoice.fechaVencimiento)}'),
-                    const SizedBox(height: 8),
-                    Text('Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'),
-                    const SizedBox(height: 4),
-                    Text('Valor registrado: ${_formatCurrency(paid)}'),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Saldo pendiente: ${_formatCurrency(pending)}',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: Colors.orange.shade900,
-                          ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-    final readingsPanel = _ReportPanel(
-      title: 'Lecturas consultadas',
-      emptyMessage: 'No hay resultados cargados.',
-      expandChild: !compact,
-      child: readingsList,
-    );
-    final pendingPanel = _ReportPanel(
-      title: 'Informe de cartera pendiente',
-      emptyMessage: 'No hay cartera pendiente con el filtro actual.',
-      expandChild: !compact,
-      child: pendingList,
-    );
-
-    return Theme(
-      data: highContrastTheme,
-      child: DefaultTextStyle.merge(
-        style: const TextStyle(color: Colors.black),
-        child: Stack(
-        children: [
-          AbsorbPointer(
-            absorbing: _loading,
-            child: compact
-              ? SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Consultas y reportes',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Consulta consumos por periodo o usuario y revisa la cartera pendiente del mismo filtro.',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          SizedBox(
-                            width: 220,
-                            child: TextField(
-                              controller: _periodController,
-                              decoration: const InputDecoration(
-                                labelText: 'Periodo (YYYY-MM) o vacio',
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 220,
-                            child: TextField(
-                              controller: _customerController,
-                              decoration: const InputDecoration(
-                                labelText: 'Codigo usuario o vacio',
-                              ),
-                            ),
-                          ),
-                          FilterChip(
-                            label: const Text('Solo irregularidades'),
-                            labelStyle: const TextStyle(color: Colors.black),
-                            selected: _onlyIrregular,
-                            onSelected: (value) {
-                              setState(() => _onlyIrregular = value);
-                            },
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: _load,
-                            icon: const Icon(Icons.search_rounded),
-                            label: const Text('Consultar'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _items.isEmpty ? null : _export,
-                            icon: const Icon(Icons.download_rounded),
-                            label: const Text('Exportar Excel'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          _MetricCard(
-                            label: 'Lecturas',
-                            value: '${_items.length}',
-                          ),
-                          _MetricCard(
-                            label: 'Recibos pendientes',
-                            value: '${_pendingInvoices.length}',
-                          ),
-                          _MetricCard(
-                            label: 'Cartera pendiente',
-                            value: _formatCurrency(_pendingAmount),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      readingsPanel,
-                      const SizedBox(height: 16),
-                      pendingPanel,
-                    ],
-                  ),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Consultas y reportes',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Consulta consumos por periodo o usuario y revisa la cartera pendiente del mismo filtro.',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    const SizedBox(height: 20),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        SizedBox(
-                          width: 220,
-                          child: TextField(
-                            controller: _periodController,
-                            decoration: const InputDecoration(
-                              labelText: 'Periodo (YYYY-MM) o vacio',
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 220,
-                          child: TextField(
-                            controller: _customerController,
-                            decoration: const InputDecoration(
-                              labelText: 'Codigo usuario o vacio',
-                            ),
-                          ),
-                        ),
-                        FilterChip(
-                          label: const Text('Solo irregularidades'),
-                          labelStyle: const TextStyle(color: Colors.black),
-                          selected: _onlyIrregular,
-                          onSelected: (value) {
-                            setState(() => _onlyIrregular = value);
-                          },
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.search_rounded),
-                          label: const Text('Consultar'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _items.isEmpty ? null : _export,
-                          icon: const Icon(Icons.download_rounded),
-                          label: const Text('Exportar Excel'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _MetricCard(
-                          label: 'Lecturas',
-                          value: '${_items.length}',
-                        ),
-                        _MetricCard(
-                          label: 'Recibos pendientes',
-                          value: '${_pendingInvoices.length}',
-                        ),
-                        _MetricCard(
-                          label: 'Cartera pendiente',
-                          value: _formatCurrency(_pendingAmount),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 3, child: readingsPanel),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 2, child: pendingPanel),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-          ),
-          if (_loading)
-            Positioned.fill(
-              child: ColoredBox(
-                color: AppColors.textPrimary.withValues(alpha: 0.18),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-            ),
-        ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  Future<void> _loadPeriods() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final period = _normalize(_periodController.text);
-      final customerCode = _normalize(_customerController.text);
-      final readingsFuture = _firestoreService.fetchReadingsReport(
-        period: period,
-        customerCode: customerCode,
-        onlyIrregular: _onlyIrregular,
-      );
-      final pendingInvoicesFuture = _invoiceService.fetchPendingInvoicesReport(
-        period: period,
-        customerCode: customerCode,
-      );
-      final readings = await readingsFuture;
-      final invoicesByReading = await _fetchInvoicesByReading(readings);
-      final pendingInvoices = await pendingInvoicesFuture;
-      if (!mounted) {
-        return;
-      }
+      final periods = await _periodService.fetchOperationalPeriods();
+      final selected = periods.isEmpty
+          ? null
+          : periods.firstWhere(
+              (item) => item.vigente,
+              orElse: () => periods.first,
+            );
       setState(() {
-        _items = readings;
-        _invoicesByReading = invoicesByReading;
-        _pendingInvoices = pendingInvoices;
+        _periods = periods;
+        _selectedPeriod = selected;
       });
+    } catch (error) {
+      setState(() => _error = '$error');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -411,77 +81,199 @@ class _ConsumptionReportsAdminPageState
     }
   }
 
-  Future<void> _export() async {
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: _loading,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Reporte de consumos',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Genera el archivo de consumos y cartera asociada para el periodo seleccionado.',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 280,
+                      child: DropdownButtonFormField<BillingPeriod>(
+                        isExpanded: true,
+                        initialValue: _selectedPeriod,
+                        decoration: const InputDecoration(labelText: 'Periodo'),
+                        items: _periods
+                            .map(
+                              (period) => DropdownMenuItem(
+                                value: period,
+                                child: Text(
+                                  _periodLabel(period),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (period) {
+                          setState(() => _selectedPeriod = period);
+                        },
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _selectedPeriod == null ? null : _generate,
+                      icon: const Icon(Icons.file_download_rounded),
+                      label: const Text('Generar Excel'),
+                    ),
+                  ],
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: Colors.red.shade800)),
+              ],
+              const SizedBox(height: 20),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    _selectedPeriod == null
+                        ? 'No hay periodos disponibles para generar el reporte.'
+                        : 'Selecciona el periodo y genera el Excel.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_loading)
+          Positioned.fill(
+            child: ColoredBox(
+              color: AppColors.textPrimary.withValues(alpha: 0.14),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _generate() async {
+    final period = _selectedPeriod;
+    if (period == null) {
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final readings = await _firestoreService.fetchReadingsReport(
+        period: period.id,
+      );
+      final invoicesByReading = await _fetchInvoicesByReading(readings);
+      final documentByUserCode = await _fetchDocumentByUserCode();
+      final paidReadings = readings
+          .where((item) {
+            final invoice = invoicesByReading[_InvoiceKey.fromReading(item)];
+            return (invoice?.valorPagado ?? 0) > 0;
+          })
+          .toList();
+      await _export(
+        periodId: period.id,
+        items: paidReadings,
+        invoicesByReading: invoicesByReading,
+        documentByUserCode: documentByUserCode,
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = '$error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _export({
+    required String periodId,
+    required List<ConsumptionReading> items,
+    required Map<_InvoiceKey, Invoice> invoicesByReading,
+    required Map<String, String> documentByUserCode,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final excel = xls.Excel.createExcel();
     final sheet = excel['reporte'];
     sheet.appendRow([
       xls.TextCellValue('periodo'),
       xls.TextCellValue('codigo_usuario'),
+      xls.TextCellValue('identificacion_usuario'),
       xls.TextCellValue('nombre_usuario'),
       xls.TextCellValue('codigo_contador'),
-      xls.TextCellValue('lectura_anterior'),
-      xls.TextCellValue('lectura_actual'),
       xls.TextCellValue('consumo_calculado'),
-      xls.TextCellValue('saldo_anterior'),
-      xls.TextCellValue('valor_total_a_pagar'),
       xls.TextCellValue('valor_pagado'),
-      xls.TextCellValue('estado'),
-      xls.TextCellValue('facturado'),
-      xls.TextCellValue('pagado'),
-      xls.TextCellValue('irregularidad'),
-      xls.TextCellValue('observaciones_operario'),
-      xls.TextCellValue('observaciones_admin'),
     ]);
-    for (final item in _items) {
-      final row = _exportRowForReading(item);
-      sheet.appendRow(
-        row.map((value) => xls.TextCellValue(value)).toList(),
-      );
+    var totalConsumoCalculado = 0;
+    var totalValorPagado = 0;
+    for (final item in items) {
+      final invoice = invoicesByReading[_InvoiceKey.fromReading(item)];
+      final consumption = item.consumoCalculado;
+      final paidAmount = invoice?.valorPagado ?? 0;
+      if (consumption != null) {
+        totalConsumoCalculado += consumption;
+      }
+      totalValorPagado += paidAmount;
+      sheet.appendRow([
+        xls.TextCellValue(item.periodoActual),
+        xls.TextCellValue(item.codigoUsuario),
+        xls.TextCellValue(
+          documentByUserCode[_normalizeUserCode(item.codigoUsuario)] ?? '',
+        ),
+        xls.TextCellValue(item.nombreUsuario),
+        xls.TextCellValue(item.codigoContador),
+        consumption == null
+            ? xls.TextCellValue('')
+            : xls.IntCellValue(consumption),
+        xls.IntCellValue(paidAmount),
+      ]);
     }
+    sheet.appendRow([
+      xls.TextCellValue('TOTAL'),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.IntCellValue(totalConsumoCalculado),
+      xls.IntCellValue(totalValorPagado),
+    ]);
     excel.setDefaultSheet('reporte');
     final bytes = excel.encode();
     if (bytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('No fue posible generar el Excel.')),
       );
       return;
     }
-    final filename = 'consumos_${_normalize(_periodController.text) ?? 'todos'}.xlsx';
     await saveConsumptionReportFile(
       bytes: Uint8List.fromList(bytes),
-      fileName: filename,
+      fileName: 'consumos_$periodId.xlsx',
     );
     messenger.showSnackBar(
       const SnackBar(content: Text('Reporte Excel descargado.')),
     );
-  }
-
-  String? _normalize(String value) {
-    final text = value.trim();
-    return text.isEmpty ? null : text;
-  }
-
-  List<String> _exportRowForReading(ConsumptionReading item) {
-    final invoice = _invoicesByReading[_InvoiceKey.fromReading(item)];
-    return [
-      item.periodoActual,
-      item.codigoUsuario,
-      item.nombreUsuario,
-      item.codigoContador,
-      '${item.lecturaAnterior ?? ''}',
-      '${item.lecturaActual}',
-      '${item.consumoCalculado ?? ''}',
-      invoice == null ? '' : '${invoice.saldoAnterior}',
-      invoice == null ? '' : '${_invoiceTotalToPay(invoice)}',
-      '${invoice?.valorPagado ?? 0}',
-      item.estado,
-      item.facturado ? 'si' : 'no',
-      item.pagado ? 'si' : 'no',
-      item.irregularidad?.tipo ?? '',
-      item.observacionesOperario ?? '',
-      item.observacionesAdmin ?? '',
-    ];
   }
 
   Future<Map<_InvoiceKey, Invoice>> _fetchInvoicesByReading(
@@ -497,10 +289,32 @@ class _ConsumptionReportsAdminPageState
     }
     return invoicesByReading;
   }
+
+  Future<Map<String, String>> _fetchDocumentByUserCode() async {
+    final users = await _userService.fetchAllUsers();
+    final documents = <String, String>{};
+    for (final user in users) {
+      final document = user.numeroDocumento.trim();
+      if (document.isEmpty) {
+        continue;
+      }
+      for (final code in user.codigosUsuario) {
+        final normalizedCode = _normalizeUserCode(code.codigoUsuario);
+        if (normalizedCode.isNotEmpty) {
+          documents[normalizedCode] = document;
+        }
+      }
+      final legacyCode = _normalizeUserCode(user.codigoUsuario);
+      if (legacyCode.isNotEmpty) {
+        documents[legacyCode] = document;
+      }
+    }
+    return documents;
+  }
 }
 
-int _invoiceTotalToPay(Invoice invoice) {
-  return invoice.totalAPagar;
+String _normalizeUserCode(String value) {
+  return value.trim().toUpperCase();
 }
 
 @immutable
@@ -530,95 +344,6 @@ class _InvoiceKey {
   int get hashCode => Object.hash(period, meterCode);
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 210,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReportPanel extends StatelessWidget {
-  const _ReportPanel({
-    required this.title,
-    required this.emptyMessage,
-    required this.child,
-    this.expandChild = true,
-  });
-
-  final String title;
-  final String emptyMessage;
-  final Widget? child;
-  final bool expandChild;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFA),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          if (expandChild)
-            Expanded(
-              child: child ??
-                  Center(
-                    child: Text(emptyMessage),
-                  ),
-            )
-          else
-            child ??
-                Center(
-                  child: Text(emptyMessage),
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-String _formatDate(DateTime value) {
-  return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
-}
-
-String _formatCurrency(int value) {
-  final digits = value.toString();
-  final buffer = StringBuffer();
-  for (var index = 0; index < digits.length; index++) {
-    final reverseIndex = digits.length - index;
-    buffer.write(digits[index]);
-    if (reverseIndex > 1 && reverseIndex % 3 == 1) {
-      buffer.write('.');
-    }
-  }
-  return '\$${buffer.toString()}';
+String _periodLabel(BillingPeriod period) {
+  return '${period.clave} - ${period.nombre}${period.vigente ? ' - Vigente' : ''}';
 }

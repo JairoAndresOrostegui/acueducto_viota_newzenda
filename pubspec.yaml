@@ -38,6 +38,7 @@ dependencies:
   firebase_auth: ^6.1.0
   cloud_functions: ^6.0.4
   firebase_core: ^4.1.1
+  firebase_storage: ^13.3.0
   shared_preferences: ^2.5.3
   pdf: ^3.11.3
   printing: ^5.14.2

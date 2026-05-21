@@ -39,6 +39,22 @@
         { "fieldPath": "codigoUsuario", "order": "ASCENDING" },
         { "fieldPath": "pagado", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "gastos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "periodoId", "order": "ASCENDING" },
+        { "fieldPath": "fechaGasto", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "gastos_conceptos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "nombre", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

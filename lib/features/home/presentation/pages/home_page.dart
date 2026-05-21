@@ -6,7 +6,8 @@ import '../../../admin/presentation/pages/admin_console_page.dart';
 import '../../../billing/invoices/presentation/pages/client_invoice_page.dart';
 import '../../../catalogs/data/catalog_firestore_service.dart';
 import '../../../consumptions/presentation/pages/consumption_register_page.dart';
-import '../../../consumptions/presentation/pages/consumption_reports_admin_page.dart';
+import '../../../reports/presentation/pages/role_reports_page.dart';
+import '../../../treasury/presentation/pages/treasurer_console_page.dart';
 import '../../../users/data/user_admin_functions_service.dart';
 import '../../../users/data/user_audit_log_service.dart';
 import '../../../users/data/user_firestore_service.dart';
@@ -107,12 +108,14 @@ class HomePage extends StatelessWidget {
         );
       case 'cliente':
         return ClientInvoicePage(currentUser: currentUser);
+      case 'tesorero':
+        return TreasurerConsolePage(currentUser: currentUser);
       case 'contador':
       case 'fiscal':
         return const _SingleModuleShell(
-          title: 'Consumos',
+          title: 'Reportes',
           message: 'Modulo disponible: Reportes',
-          child: ConsumptionReportsAdminPage(),
+          child: RoleReportsPage(),
         );
       default:
         return _NoAccessView(

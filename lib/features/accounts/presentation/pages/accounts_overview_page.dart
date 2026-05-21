@@ -69,6 +69,9 @@ class _AccountsOverviewPageState extends State<AccountsOverviewPage> {
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _selectedPeriod = selected;
@@ -77,6 +80,9 @@ class _AccountsOverviewPageState extends State<AccountsOverviewPage> {
         await _loadPeriod(selected);
       }
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -96,6 +102,9 @@ class _AccountsOverviewPageState extends State<AccountsOverviewPage> {
         _invoiceService.fetchInvoicesForPeriod(period.id),
         _accountMovementService.fetchMovements(limit: 5000),
       ]);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _invoices = results[0] as List<Invoice>;
         _movements = (results[1] as List<AccountMovement>)
@@ -103,6 +112,9 @@ class _AccountsOverviewPageState extends State<AccountsOverviewPage> {
             .toList();
       });
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {

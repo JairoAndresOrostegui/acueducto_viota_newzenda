@@ -35,6 +35,13 @@ service cloud.firestore {
           currentUserData().estado == 'activo';
     }
 
+    function isTesorero() {
+      return signedIn() &&
+          exists(currentUserPath()) &&
+          currentUserData().rol == 'tesorero' &&
+          currentUserData().estado == 'activo';
+    }
+
     function isActiveClientDoc() {
       return resource.data.rol == 'cliente' &&
           resource.data.estado == 'activo';
@@ -45,7 +52,7 @@ service cloud.firestore {
     }
 
     function canViewConsumptionReports() {
-      return isAdmin() || isContador();
+      return isAdmin() || isContador() || isTesorero();
     }
 
     function isOwnClientCode(code) {
@@ -92,7 +99,8 @@ service cloud.firestore {
       allow read: if signedIn() &&
           (request.auth.uid == userId ||
               isAdmin() ||
-              (isOperador() && isActiveClientDoc()));
+              (isOperador() && isActiveClientDoc()) ||
+              ((isContador() || isTesorero()) && isActiveClientDoc()));
 
       allow create, update: if isAdmin() &&
           request.resource.data.uid == userId;
@@ -147,6 +155,7 @@ service cloud.firestore {
       match /recibos/{reciboId} {
         allow read: if isAdmin() ||
             isContador() ||
+            isTesorero() ||
             isOwnClientCode(resource.data.codigoUsuario);
         allow create, update: if isAdmin();
         allow delete: if false;
@@ -156,6 +165,7 @@ service cloud.firestore {
     match /{path=**}/recibos/{reciboId} {
       allow read: if isAdmin() ||
           isContador() ||
+          isTesorero() ||
           isOwnClientCode(resource.data.codigoUsuario);
       allow create, update, delete: if false;
     }
@@ -169,16 +179,38 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdmin();
     }
 
+    match /gastos_conceptos/{conceptoId} {
+      allow read: if isAdmin() ||
+          (isTesorero() && resource.data.estado == 'activo');
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /gastos/{gastoId} {
+      allow read: if isAdmin() || isTesorero() || isContador();
+      allow create: if isAdmin() || isTesorero();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /gastos_soportes/{periodoId} {
+      allow read: if isAdmin() || isTesorero();
+      allow create: if isAdmin() || isTesorero();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
     match /facturacion_observaciones/{observacionId} {
       allow read, create, update, delete: if isAdmin();
     }
 
     match /valores_facturacion/{valorId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read: if canViewConsumptionReports();
+      allow create, update, delete: if isAdmin();
     }
 
     match /cuentas_movimientos/{movimientoId} {
-      allow read: if isAdmin() || isContador();
+      allow read: if isAdmin() || isContador() || isTesorero();
       allow create, update: if isAdmin();
       allow delete: if false;
     }

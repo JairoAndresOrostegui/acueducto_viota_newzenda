@@ -136,6 +136,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _selectedPeriod = periods.contains(selected)
@@ -146,6 +149,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
         await _loadPeriodData(_selectedPeriod!);
       }
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -155,6 +161,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
   }
 
   Future<void> _loadPeriodData(BillingPeriod period) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -165,6 +174,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
         _consumptionService.fetchReadingsForPeriod(period.id),
         _invoiceService.fetchInvoicesForPeriod(period.id),
       ]);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _readings = results[0] as List<ConsumptionReading>;
         _invoices = results[1] as List<Invoice>;
@@ -174,6 +186,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
         }
       });
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {

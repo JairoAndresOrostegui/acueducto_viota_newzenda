@@ -37,6 +37,7 @@ class _ConsumptionReportsPlaceholderPageState
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
+  bool _hasGenerated = false;
   bool _onlyIrregular = false;
   String? _error;
   String _query = '';
@@ -75,14 +76,17 @@ class _ConsumptionReportsPlaceholderPageState
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _selectedPeriod = selected;
       });
-      if (selected != null) {
-        await _loadReadings(selected);
-      }
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -92,6 +96,9 @@ class _ConsumptionReportsPlaceholderPageState
   }
 
   Future<void> _loadReadings(BillingPeriod period) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -101,8 +108,17 @@ class _ConsumptionReportsPlaceholderPageState
       final readings = await _consumptionService.fetchReadingsForPeriod(
         period.id,
       );
-      setState(() => _readings = readings);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _readings = readings;
+        _hasGenerated = true;
+      });
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -125,13 +141,18 @@ class _ConsumptionReportsPlaceholderPageState
           onlyIrregular: _onlyIrregular,
           statusFilter: _statusFilter,
           onPeriodChanged: (period) {
-            if (period != null) {
-              _loadReadings(period);
-            }
+            setState(() {
+              _selectedPeriod = period;
+              _readings = const [];
+              _hasGenerated = false;
+            });
           },
           onIrregularChanged: (value) => setState(() => _onlyIrregular = value),
           onStatusChanged: (value) => setState(() => _statusFilter = value),
-          onExport: rows.isEmpty ? null : () => _export(rows),
+          onGenerate: _selectedPeriod == null
+              ? null
+              : () => _loadReadings(_selectedPeriod!),
+          onExport: !_hasGenerated || rows.isEmpty ? null : () => _export(rows),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -151,19 +172,15 @@ class _ConsumptionReportsPlaceholderPageState
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : rows.isEmpty
-              ? Center(
+              : Center(
                   child: Text(
-                    _readings.isEmpty
-                        ? 'No hay lecturas para este periodo.'
-                        : 'No hay consumos que coincidan con el filtro.',
+                    !_hasGenerated
+                        ? 'Selecciona los filtros y genera el reporte.'
+                        : rows.isEmpty
+                        ? 'No hay consumos que coincidan con el filtro.'
+                        : 'Reporte generado. Puedes exportar el Excel.',
+                    textAlign: TextAlign.center,
                   ),
-                )
-              : ListView.separated(
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) =>
-                      _ConsumptionReportCard(reading: rows[index]),
                 ),
         ),
       ],
@@ -218,25 +235,58 @@ class _ConsumptionReportsPlaceholderPageState
       'observaciones_operario',
       'observaciones_admin',
     ].map(xls.TextCellValue.new).toList());
+    var totalLecturaAnterior = 0;
+    var totalLecturaActual = 0;
+    var totalConsumoM3 = 0;
     for (final reading in readings) {
+      final previousReading = reading.lecturaAnterior;
+      final consumption = reading.consumoCalculado;
+      if (previousReading != null) {
+        totalLecturaAnterior += previousReading;
+      }
+      totalLecturaActual += reading.lecturaActual;
+      if (consumption != null) {
+        totalConsumoM3 += consumption;
+      }
       sheet.appendRow([
-        reading.periodoActual,
-        reading.codigoUsuario,
-        reading.nombreUsuario,
-        reading.sector,
-        reading.codigoContador,
-        '${reading.lecturaAnterior ?? ''}',
-        '${reading.lecturaActual}',
-        '${reading.consumoCalculado ?? ''}',
-        reading.estado,
-        reading.facturado ? 'si' : 'no',
-        reading.pagado ? 'si' : 'no',
-        reading.irregularidad?.tipo ?? '',
-        reading.irregularidad?.descripcion ?? '',
-        reading.observacionesOperario ?? '',
-        reading.observacionesAdmin ?? '',
-      ].map(xls.TextCellValue.new).toList());
+        xls.TextCellValue(reading.periodoActual),
+        xls.TextCellValue(reading.codigoUsuario),
+        xls.TextCellValue(reading.nombreUsuario),
+        xls.TextCellValue(reading.sector),
+        xls.TextCellValue(reading.codigoContador),
+        previousReading == null
+            ? xls.TextCellValue('')
+            : xls.IntCellValue(previousReading),
+        xls.IntCellValue(reading.lecturaActual),
+        consumption == null
+            ? xls.TextCellValue('')
+            : xls.IntCellValue(consumption),
+        xls.TextCellValue(reading.estado),
+        xls.TextCellValue(reading.facturado ? 'si' : 'no'),
+        xls.TextCellValue(reading.pagado ? 'si' : 'no'),
+        xls.TextCellValue(reading.irregularidad?.tipo ?? ''),
+        xls.TextCellValue(reading.irregularidad?.descripcion ?? ''),
+        xls.TextCellValue(reading.observacionesOperario ?? ''),
+        xls.TextCellValue(reading.observacionesAdmin ?? ''),
+      ]);
     }
+    sheet.appendRow([
+      xls.TextCellValue('TOTAL'),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.IntCellValue(totalLecturaAnterior),
+      xls.IntCellValue(totalLecturaActual),
+      xls.IntCellValue(totalConsumoM3),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+    ]);
     excel.setDefaultSheet('consumos');
     final bytes = excel.encode();
     if (bytes == null) {
@@ -266,6 +316,7 @@ class _Header extends StatelessWidget {
     required this.onPeriodChanged,
     required this.onIrregularChanged,
     required this.onStatusChanged,
+    required this.onGenerate,
     required this.onExport,
   });
 
@@ -278,6 +329,7 @@ class _Header extends StatelessWidget {
   final ValueChanged<BillingPeriod?> onPeriodChanged;
   final ValueChanged<bool> onIrregularChanged;
   final ValueChanged<String> onStatusChanged;
+  final VoidCallback? onGenerate;
   final VoidCallback? onExport;
 
   @override
@@ -330,6 +382,11 @@ class _Header extends StatelessWidget {
                 selected: onlyIrregular,
                 onSelected: onIrregularChanged,
               ),
+              ElevatedButton.icon(
+                onPressed: onGenerate,
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Generar'),
+              ),
               OutlinedButton.icon(
                 onPressed: onExport,
                 icon: const Icon(Icons.download_rounded),
@@ -364,43 +421,6 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConsumptionReportCard extends StatelessWidget {
-  const _ConsumptionReportCard({required this.reading});
-
-  final ConsumptionReading reading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            toDisplayUserName(reading.nombreUsuario),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 6),
-          Text('Codigo: ${reading.codigoUsuario} - Contador: ${reading.codigoContador} - Sector: ${toDisplayText(reading.sector)}'),
-          const SizedBox(height: 6),
-          Text('Lectura anterior: ${reading.lecturaAnterior ?? '-'} - Actual: ${reading.lecturaActual} - Consumo: ${reading.consumoCalculado ?? '-'} m3'),
-          const SizedBox(height: 6),
-          Text('Estado: ${toDisplayText(reading.estado)} - Facturado: ${reading.facturado ? 'si' : 'no'} - Pagado: ${reading.pagado ? 'si' : 'no'}'),
-          if (reading.irregularidad != null) ...[
-            const SizedBox(height: 6),
-            Text('Irregularidad: ${toDisplayText(reading.irregularidad!.tipo)} - ${reading.irregularidad!.descripcion}'),
-          ],
         ],
       ),
     );

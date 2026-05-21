@@ -41,6 +41,7 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
+  bool _hasGenerated = false;
   bool _allPeriods = false;
   String? _error;
   String _query = '';
@@ -75,12 +76,17 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
               (item) => item.vigente,
               orElse: () => periods.first,
             );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _periods = periods;
         _selectedPeriod = selected;
       });
-      await _loadData();
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -90,6 +96,9 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -106,11 +115,18 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
         );
       }
       final movements = await _accountMovementService.fetchMovements(limit: 5000);
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _invoices = invoices;
         _movements = movements;
+        _hasGenerated = true;
       });
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _error = '$error');
     } finally {
       if (mounted) {
@@ -133,15 +149,24 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
           rows: allRows,
           statusFilter: _statusFilter,
           onPeriodChanged: (period) {
-            setState(() => _selectedPeriod = period);
-            _loadData();
+            setState(() {
+              _selectedPeriod = period;
+              _invoices = const [];
+              _movements = const [];
+              _hasGenerated = false;
+            });
           },
           onAllPeriodsChanged: (value) {
-            setState(() => _allPeriods = value);
-            _loadData();
+            setState(() {
+              _allPeriods = value;
+              _invoices = const [];
+              _movements = const [];
+              _hasGenerated = false;
+            });
           },
           onStatusChanged: (value) => setState(() => _statusFilter = value),
-          onExport: rows.isEmpty ? null : () => _export(rows),
+          onGenerate: _allPeriods || _selectedPeriod != null ? _loadData : null,
+          onExport: !_hasGenerated || rows.isEmpty ? null : () => _export(rows),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -161,19 +186,15 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : rows.isEmpty
-              ? Center(
+              : Center(
                   child: Text(
-                    _invoices.isEmpty
-                        ? 'No hay recibos para analizar cartera.'
-                        : 'No hay registros que coincidan con el filtro.',
+                    !_hasGenerated
+                        ? 'Selecciona los filtros y genera el reporte.'
+                        : rows.isEmpty
+                        ? 'No hay registros que coincidan con el filtro.'
+                        : 'Reporte generado. Puedes exportar el Excel.',
+                    textAlign: TextAlign.center,
                   ),
-                )
-              : ListView.separated(
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) =>
-                      _PortfolioCard(row: rows[index]),
                 ),
         ),
       ],
@@ -246,24 +267,55 @@ class _PortfolioReportsPageState extends State<PortfolioReportsPage> {
       'estado',
       'fecha_vencimiento',
     ].map(xls.TextCellValue.new).toList());
+    var totalAPagar = 0;
+    var totalValorPagado = 0;
+    var totalSaldoPendiente = 0;
+    var totalBalanceCuenta = 0;
+    var totalSaldoAFavor = 0;
+    var totalPagosRegistrados = 0;
     for (final row in rows) {
       final invoice = row.invoice;
+      final paidAmount = invoice.valorPagado ?? 0;
+      final creditBalance = row.accountBalance < 0
+          ? row.accountBalance.abs()
+          : 0;
+      totalAPagar += invoice.totalAPagar;
+      totalValorPagado += paidAmount;
+      totalSaldoPendiente += row.pending;
+      totalBalanceCuenta += row.accountBalance;
+      totalSaldoAFavor += creditBalance;
+      totalPagosRegistrados += row.totalPayments;
       sheet.appendRow([
-        invoice.periodo,
-        invoice.codigoUsuario,
-        invoice.nombreUsuario,
-        invoice.sector,
-        invoice.codigoContador,
-        '${invoice.totalAPagar}',
-        '${invoice.valorPagado ?? 0}',
-        '${row.pending}',
-        '${row.accountBalance}',
-        '${row.accountBalance < 0 ? row.accountBalance.abs() : 0}',
-        '${row.totalPayments}',
-        invoice.estado,
-        _formatDate(invoice.fechaVencimiento),
-      ].map(xls.TextCellValue.new).toList());
+        xls.TextCellValue(invoice.periodo),
+        xls.TextCellValue(invoice.codigoUsuario),
+        xls.TextCellValue(invoice.nombreUsuario),
+        xls.TextCellValue(invoice.sector),
+        xls.TextCellValue(invoice.codigoContador),
+        xls.IntCellValue(invoice.totalAPagar),
+        xls.IntCellValue(paidAmount),
+        xls.IntCellValue(row.pending),
+        xls.IntCellValue(row.accountBalance),
+        xls.IntCellValue(creditBalance),
+        xls.IntCellValue(row.totalPayments),
+        xls.TextCellValue(invoice.estado),
+        xls.TextCellValue(_formatDate(invoice.fechaVencimiento)),
+      ]);
     }
+    sheet.appendRow([
+      xls.TextCellValue('TOTAL'),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+      xls.IntCellValue(totalAPagar),
+      xls.IntCellValue(totalValorPagado),
+      xls.IntCellValue(totalSaldoPendiente),
+      xls.IntCellValue(totalBalanceCuenta),
+      xls.IntCellValue(totalSaldoAFavor),
+      xls.IntCellValue(totalPagosRegistrados),
+      xls.TextCellValue(''),
+      xls.TextCellValue(''),
+    ]);
     excel.setDefaultSheet('cartera');
     final bytes = excel.encode();
     if (bytes == null) {
@@ -292,6 +344,7 @@ class _Header extends StatelessWidget {
     required this.onPeriodChanged,
     required this.onAllPeriodsChanged,
     required this.onStatusChanged,
+    required this.onGenerate,
     required this.onExport,
   });
 
@@ -303,6 +356,7 @@ class _Header extends StatelessWidget {
   final ValueChanged<BillingPeriod?> onPeriodChanged;
   final ValueChanged<bool> onAllPeriodsChanged;
   final ValueChanged<String> onStatusChanged;
+  final VoidCallback? onGenerate;
   final VoidCallback? onExport;
 
   @override
@@ -359,6 +413,11 @@ class _Header extends StatelessWidget {
               Chip(label: Text('Pagado: ${_formatCurrency(paid)}')),
               Chip(label: Text('A favor: ${_formatCurrency(credit)}')),
               Chip(label: Text('Suspendidos: $suspended')),
+              ElevatedButton.icon(
+                onPressed: onGenerate,
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Generar'),
+              ),
               OutlinedButton.icon(
                 onPressed: onExport,
                 icon: const Icon(Icons.download_rounded),
@@ -397,43 +456,6 @@ class _Header extends StatelessWidget {
                 onSelected: (_) => onStatusChanged('all'),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PortfolioCard extends StatelessWidget {
-  const _PortfolioCard({required this.row});
-
-  final _PortfolioRow row;
-
-  @override
-  Widget build(BuildContext context) {
-    final invoice = row.invoice;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(toDisplayUserName(invoice.nombreUsuario), style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text('Codigo: ${invoice.codigoUsuario} - Contador: ${invoice.codigoContador} - Sector: ${toDisplayText(invoice.sector)}'),
-          const SizedBox(height: 6),
-          Text('Periodo: ${invoice.periodo} - Vence: ${_formatDate(invoice.fechaVencimiento)} - Estado: ${toDisplayText(invoice.estado)}'),
-          const SizedBox(height: 6),
-          Text('Total: ${_formatCurrency(invoice.totalAPagar)} - Pagado: ${_formatCurrency(invoice.valorPagado ?? 0)} - Pendiente: ${_formatCurrency(row.pending)}'),
-          const SizedBox(height: 6),
-          Text(
-            row.accountBalance < 0
-                ? 'Saldo a favor acumulado: ${_formatCurrency(row.accountBalance.abs())}'
-                : 'Balance de cuenta: ${_formatCurrency(row.accountBalance)}',
           ),
         ],
       ),
