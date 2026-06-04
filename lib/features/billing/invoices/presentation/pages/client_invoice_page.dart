@@ -152,7 +152,10 @@ class _ClientInvoiceCard extends StatelessWidget {
     final compact = MediaQuery.sizeOf(context).width < 560;
     final status = invoice.estadoPeriodoAnterior?.trim().toLowerCase() ?? '';
     final title = (status == 'suspendido' || invoice.estaSuspendido)
-        ? 'Servicio suspendido'
+        // Cambio temporal solicitado: en la vista del recibo el estado
+        // suspendido se muestra como "En mora". Para volver al texto original,
+        // restaurar "Servicio suspendido"; no cambiar la logica de estados.
+        ? 'Recibo en mora'
         : switch (status) {
             'en_mora' => 'Recibo en mora',
             _ => 'Recibo pendiente de pago',

@@ -1227,7 +1227,7 @@ class _InvoicePreviewCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Estado: ${toDisplayText(invoice.estaSuspendido ? invoice.estado : (invoice.estadoPeriodoAnterior ?? invoice.estado))}',
+                  'Estado: ${_receiptStatusDisplayText(invoice)}',
                 ),
               ),
               const SizedBox(width: 16),
@@ -1553,6 +1553,17 @@ enum _PdfExportMode {
 
 String _periodLabel(BillingPeriod period) {
   return '${period.clave} - ${toDisplayText(period.nombre)}${period.vigente ? ' - Vigente' : ''}';
+}
+
+String _receiptStatusDisplayText(Invoice invoice) {
+  if (invoice.estaSuspendido) {
+    // Cambio temporal solicitado: los recibos suspendidos se muestran como
+    // "En mora" solo en la visualizacion del recibo. Para volver al texto
+    // original, retornar toDisplayText(invoice.estado); no modificar el estado
+    // interno "suspendido" ni el estado normal "en_mora".
+    return 'En mora';
+  }
+  return toDisplayText(invoice.estadoPeriodoAnterior ?? invoice.estado);
 }
 
 String _formatDate(DateTime value) {

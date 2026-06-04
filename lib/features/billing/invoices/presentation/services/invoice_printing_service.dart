@@ -690,7 +690,11 @@ class _ReceiptPage extends pw.StatelessWidget {
   _StatusPresentation _statusPresentation(String? value) {
     switch ((value ?? '').trim().toLowerCase()) {
       case 'suspendido':
-        return const _StatusPresentation('Suspendido', PdfColors.red800);
+        // Cambio temporal solicitado: los recibos suspendidos se muestran como
+        // "En mora" solo en impresion. Para volver al texto original, cambiar
+        // esta etiqueta a "Suspendido"; no modificar el estado interno
+        // "suspendido" ni el caso "en_mora" de abajo.
+        return const _StatusPresentation('En mora', PdfColors.red800);
       case 'en_mora':
         return const _StatusPresentation('En mora', PdfColors.orange800);
       default:
