@@ -153,8 +153,12 @@ class Invoice {
 
   int get totalAPagar => math.max(total + saldoAnterior + reconexion, 0);
 
-  int get saldoPendiente =>
-      math.max(totalAPagar - (valorPagado ?? 0), 0);
+  int get saldoPendiente {
+    if (estaPagado) {
+      return 0;
+    }
+    return math.max(totalAPagar - (valorPagado ?? 0), 0);
+  }
 
   bool get estaPagado => pagado || estado.trim().toLowerCase() == 'pagado';
 
@@ -191,8 +195,7 @@ class Invoice {
       'observacionesPago': observacionesPago,
       'actorUid': actorUid,
       'actorNombre': actorNombre,
-      'observaciones':
-          observaciones.map((item) => item.toMap()).toList(),
+      'observaciones': observaciones.map((item) => item.toMap()).toList(),
       'estadoPeriodoAnterior': estadoPeriodoAnterior,
       'avisoFacturacion': avisoFacturacion,
       'mensaje': mensaje,
@@ -225,7 +228,8 @@ class Invoice {
           .map((item) => item.trim())
           .where((item) => item.isNotEmpty)
           .toList(),
-      estado: data['estado'] as String? ??
+      estado:
+          data['estado'] as String? ??
           ((data['pagado'] as bool? ?? false) ? 'pagado' : 'facturado'),
       valorConfigId: data['valorConfigId'] as String? ?? '',
       valorConfigVersion: data['valorConfigVersion'] as int? ?? 0,

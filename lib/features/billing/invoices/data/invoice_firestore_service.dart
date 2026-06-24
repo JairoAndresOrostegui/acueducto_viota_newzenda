@@ -808,7 +808,7 @@ class InvoiceFirestoreService {
     required Invoice? previousInvoice,
     required int? accountBalance,
   }) {
-    if (accountBalance != null && accountBalance != 0) {
+    if (accountBalance != null) {
       return accountBalance;
     }
     if (previousInvoice == null ||
