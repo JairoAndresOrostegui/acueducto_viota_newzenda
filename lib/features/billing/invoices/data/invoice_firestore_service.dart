@@ -196,10 +196,10 @@ class InvoiceFirestoreService {
     );
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
-    final accountBalancesByCode = await _accountMovementService
-        .fetchBalancesBeforePeriod(
+    final accountBalancesByMeter = await _accountMovementService
+        .fetchMeterBalancesBeforePeriod(
           periodId: period.id,
-          customerCodes: readings.map((item) => item.codigoUsuario),
+          meterCodes: readings.map((item) => item.codigoContador),
         );
 
     final batch = _db.batch();
@@ -215,9 +215,7 @@ class InvoiceFirestoreService {
         generatedAt: now,
         dueDate: dueDate,
         previousInvoices: previousInvoices,
-        accountBalance: accountBalancesByCode[
-          _normalizeUserCode(reading.codigoUsuario)
-        ],
+        accountBalance: accountBalancesByMeter[reading.codigoContador.trim()],
         sector:
             usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
             '',
@@ -421,12 +419,10 @@ class InvoiceFirestoreService {
     );
     final observations = await _observationService.fetchItems();
     final usersByCode = await _fetchUsersByCode();
-    final accountBalancesByCode = await _accountMovementService
-        .fetchBalancesBeforePeriod(
+    final accountBalancesByMeter = await _accountMovementService
+        .fetchMeterBalancesBeforePeriod(
           periodId: period.id,
-          customerCodes: readingsByMeter.values.map(
-            (item) => item.codigoUsuario,
-          ),
+          meterCodes: readingsByMeter.values.map((item) => item.codigoContador),
         );
 
     var regeneratedCount = 0;
@@ -453,9 +449,7 @@ class InvoiceFirestoreService {
         generatedAt: now,
         dueDate: dueDate,
         previousInvoices: previousInvoices,
-        accountBalance: accountBalancesByCode[
-          _normalizeUserCode(reading.codigoUsuario)
-        ],
+        accountBalance: accountBalancesByMeter[reading.codigoContador.trim()],
         sector:
             usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ??
             '',
@@ -535,10 +529,10 @@ class InvoiceFirestoreService {
     final previousInvoicesByMeter = await _fetchPreviousInvoiceHistoryByMeter(
       period,
     );
-    final accountBalancesByCode = await _accountMovementService
-        .fetchBalancesBeforePeriod(
+    final accountBalancesByMeter = await _accountMovementService
+        .fetchMeterBalancesBeforePeriod(
           periodId: period.id,
-          customerCodes: [reading.codigoUsuario],
+          meterCodes: [reading.codigoContador],
         );
     final previousInvoices =
         previousInvoicesByMeter[reading.codigoContador] ?? const <Invoice>[];
@@ -551,8 +545,7 @@ class InvoiceFirestoreService {
       generatedAt: now,
       dueDate: dueDate,
       previousInvoices: previousInvoices,
-      accountBalance:
-          accountBalancesByCode[_normalizeUserCode(reading.codigoUsuario)],
+      accountBalance: accountBalancesByMeter[reading.codigoContador.trim()],
       sector:
           usersByCode[_normalizeUserCode(reading.codigoUsuario)]?.sector ?? '',
       appliedObservations: _resolveAppliedObservations(

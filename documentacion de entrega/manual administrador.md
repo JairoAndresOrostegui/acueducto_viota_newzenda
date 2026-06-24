@@ -2,13 +2,14 @@
 
 ## Perfil
 
-El administrador entra al panel principal con cinco macromodulos:
+El administrador entra al panel principal con seis macromodulos:
 
 1. `Usuarios`
 2. `Consumos`
 3. `Cuentas`
 4. `Facturacion`
-5. `Reportes`
+5. `Gastos`
+6. `Reportes`
 
 Algunas pantallas sensibles solo son visibles si el usuario tiene `superAdmin = true`.
 
@@ -25,8 +26,9 @@ Algunas pantallas sensibles solo son visibles si el usuario tiene `superAdmin = 
 9. Revisar saldos en `Cuentas > Cuentas`.
 10. Aplicar extraordinarios si corresponde.
 11. Revisar suspensiones.
-12. Consultar reportes de facturacion, consumos y cartera.
-13. Exportar PDF o Excel cuando haga falta.
+12. Registrar gastos y soportes del periodo.
+13. Consultar reportes de facturacion, consumos, cartera, extraordinarios y gastos.
+14. Exportar PDF o Excel cuando haga falta.
 
 ## Usuarios
 
@@ -123,6 +125,29 @@ Reglas:
 - Si hay saldo pendiente, se arrastra como saldo anterior.
 - Al cumplir mora suficiente, el estado puede pasar a `suspendido`.
 
+## Gastos
+
+Pantallas:
+
+- `Conceptos`
+- `Gastos`
+- `Soportes`
+
+Puede:
+
+- crear, editar, habilitar e inhabilitar conceptos de gasto;
+- registrar gastos por periodo;
+- editar gastos existentes;
+- cargar soporte PDF por periodo;
+- reemplazar soporte PDF existente;
+- consultar y exportar reporte de gastos.
+
+Reglas:
+
+- Los conceptos inactivos no aparecen para registrar nuevos gastos.
+- Los soportes deben ser PDF validos.
+- Solo hay un soporte activo por periodo.
+
 ## Reportes
 
 Pantallas:
@@ -130,13 +155,17 @@ Pantallas:
 - `Facturacion`
 - `Consumos`
 - `Cartera`
+- `Extraordinarios`
+- `Gastos`
 
 Puede:
 
 - exportar Excel de recibos emitidos;
 - exportar Excel de lecturas y consumos;
-- exportar Excel de cartera por periodo o consolidada.
+- exportar Excel de cartera por periodo o consolidada;
+- exportar Excel de cargos extraordinarios;
+- exportar Excel de gastos.
 
 ## Estado
 
-El perfil `administrador` cubre el flujo operativo principal y financiero basico del sistema.
+El perfil `administrador` cubre el flujo operativo, financiero y documental principal del sistema.

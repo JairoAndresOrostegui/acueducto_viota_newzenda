@@ -2,15 +2,31 @@
 
 ## Alcance
 
-Ruta:
+Ruta administrador:
 
 - `Panel principal > Reportes`
 
-Pantallas:
+Ruta tesorero:
+
+- `Panel principal > Reportes`
+
+Ruta contador/fiscal:
+
+- `Panel principal > Reportes`
+
+Pantallas para administrador y tesorero:
 
 1. `Facturacion`
 2. `Consumos`
 3. `Cartera`
+4. `Extraordinarios`
+5. `Gastos`
+
+Pantallas para contador y fiscal:
+
+1. `Consumos`
+2. `Extraordinarios`
+3. `Gastos`
 
 El modulo separa responsabilidades. No mezcla cartera dentro de facturacion ni datos financieros dentro del reporte de consumos.
 
@@ -54,9 +70,10 @@ Exporta:
 
 ## Consumos
 
-Archivo:
+Archivos:
 
 - `lib/features/reports/presentation/pages/consumption_reports_placeholder_page.dart`
+- `lib/features/consumptions/presentation/pages/consumption_reports_admin_page.dart`
 
 Objetivo:
 
@@ -126,6 +143,59 @@ Exporta:
 - Excel `reporte_cartera_{periodo}.xlsx`;
 - Excel `reporte_cartera_todos.xlsx` cuando se activa todos los periodos.
 
+## Extraordinarios
+
+Archivo:
+
+- `lib/features/reports/presentation/pages/extraordinary_reports_page.dart`
+
+Objetivo:
+
+- consultar cargos extraordinarios configurados para un periodo.
+
+Incluye:
+
+- periodo;
+- codigo de usuario;
+- nombre e identificacion del usuario cuando aplica;
+- sector;
+- contador;
+- alcance masivo o individual;
+- concepto;
+- valor;
+- total del periodo.
+
+Exporta:
+
+- Excel `reporte_extraordinarios_{periodo}.xlsx`.
+
+## Gastos
+
+Archivo:
+
+- `lib/features/reports/presentation/pages/expense_reports_page.dart`
+
+Objetivo:
+
+- consultar egresos registrados por periodo.
+
+Incluye:
+
+- periodo;
+- concepto;
+- valor;
+- fecha del gasto;
+- beneficiario;
+- identificacion del beneficiario;
+- usuario que registro;
+- fecha de registro;
+- usuario y fecha de actualizacion cuando aplique;
+- total del periodo.
+
+Exporta:
+
+- Excel `reporte_gastos_{periodo}.xlsx`.
+
 ## Estado
 
-Los tres reportes quedan listos para validacion operativa. La generacion y manejo de PDF de recibos no se modifica desde este modulo.
+Los reportes quedan listos para validacion operativa y contable. La generacion y manejo de PDF de recibos no se modifica desde este modulo.

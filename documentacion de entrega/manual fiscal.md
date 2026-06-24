@@ -1,8 +1,8 @@
-# Manual Contador
+# Manual Fiscal
 
 ## Acceso
 
-El perfil `contador` inicia sesion normalmente y tiene acceso de consulta.
+El perfil `fiscal` inicia sesion normalmente y tiene acceso de consulta.
 
 Modulo principal:
 
@@ -74,4 +74,4 @@ El perfil es de solo lectura. No registra pagos, gastos, soportes ni modifica es
 
 ## Estado
 
-El perfil `contador` queda funcional para revision de consumos, extraordinarios y gastos.
+El perfil `fiscal` queda funcional para revision de consumos, extraordinarios y gastos.

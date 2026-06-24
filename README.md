@@ -8,6 +8,7 @@ Aplicacion Flutter/Firebase para la operacion del acueducto veredal de Quitasol 
 - Frontend: Flutter.
 - Autenticacion: Firebase Authentication.
 - Datos: Cloud Firestore.
+- Archivos: Firebase Storage para soportes PDF de gastos.
 - Backend administrativo: Cloud Functions 2nd gen.
 - Hosting web: Firebase Hosting.
 - PDF de recibos: paquetes `pdf` y `printing`.
@@ -35,7 +36,9 @@ El sistema cubre el flujo operativo principal:
 - cuentas, pagos reales, saldos en mora y saldos a favor;
 - cartera por periodo o consolidada;
 - suspension automatica por mora y suspension/des-suspension administrativa;
-- reportes separados de facturacion, consumos y cartera;
+- cargos extraordinarios masivos e individuales;
+- gastos administrativos por periodo, con conceptos y soportes PDF;
+- reportes de facturacion, consumos, cartera, extraordinarios y gastos;
 - consulta de recibos pendientes por cliente.
 
 ## Macromodulos
@@ -62,7 +65,7 @@ Pantallas:
 - Importar consumos
 - Suspensiones
 
-El modulo contiene el flujo de lecturas, conflictos, importacion y suspension. Los pagos y reportes ya no viven aqui como pantallas principales.
+El modulo contiene lecturas, conflictos, importacion y suspension. Los pagos y reportes viven en `Cuentas` y `Reportes`.
 
 ### Cuentas
 
@@ -94,27 +97,48 @@ Pantallas:
 
 Genera y regenera recibos. La generacion de PDF se mantiene en este modulo.
 
-### Reportes
+### Gastos
 
 Pantallas:
+
+- Conceptos
+- Gastos
+- Soportes
+
+Permite administrar conceptos de gasto, registrar egresos por periodo y cargar un soporte PDF por periodo. El administrador puede crear conceptos, registrar y editar gastos, cargar o reemplazar soportes. El tesorero puede registrar gastos y cargar soportes; la edicion queda limitada segun reglas de seguridad.
+
+### Reportes
+
+Pantallas para administrador y tesorero:
 
 - Facturacion
 - Consumos
 - Cartera
+- Extraordinarios
+- Gastos
+
+Pantallas para contador y fiscal:
+
+- Consumos
+- Extraordinarios
+- Gastos
 
 Cada reporte tiene responsabilidad separada:
 
 - Facturacion: recibos emitidos, valores facturados, estados y exportacion Excel.
 - Consumos: lecturas, consumo m3, irregularidades y estado de facturacion.
 - Cartera: saldos pendientes, pagos, saldos a favor, suspendidos y cartera consolidada.
+- Extraordinarios: cargos adicionales por periodo, masivos o individuales.
+- Gastos: egresos registrados por periodo y total exportable.
 
 ## Roles implementados
 
 - `administrador`: acceso completo a los macromodulos administrativos.
 - `operador`: acceso directo a registrar consumos.
 - `cliente`: acceso a sus recibos pendientes.
-- `contador`: acceso de consulta a reportes.
-- `fiscal`: acceso de consulta a reportes.
+- `tesorero`: acceso a gastos, soportes y reportes financieros/operativos.
+- `contador`: acceso de consulta a reportes de consumos, extraordinarios y gastos.
+- `fiscal`: acceso de consulta a reportes de consumos, extraordinarios y gastos.
 
 ## Reglas funcionales importantes
 
@@ -132,6 +156,7 @@ Cada reporte tiene responsabilidad separada:
 - El estado `suspendido` se levanta pagando o desde la pantalla de suspensiones.
 - El cliente solo ve recibos asociados a sus codigos de usuario.
 - El contador y fiscal tienen acceso de solo lectura.
+- Los soportes de gastos deben ser PDF y se almacenan en `gastos_soportes/{periodoId}` dentro de Firebase Storage.
 - La eliminacion de usuario exige confirmacion escribiendo `ELIMINAR`.
 - Administradores no pueden eliminar otros administradores.
 
@@ -151,6 +176,17 @@ Cada reporte tiene responsabilidad separada:
 - `valores_facturacion`
 - `facturacion_observaciones`
 - `cuentas_movimientos`
+- `gastos_conceptos`
+- `gastos`
+- `gastos_soportes`
+
+## Storage
+
+- Ruta de soportes: `gastos_soportes/{periodoId}/{archivo}.pdf`
+- Reglas: `storage.rules`
+- Solo se aceptan PDF menores a 20 MB.
+- Lectura y carga: administrador o tesorero activo.
+- Reemplazo/borrado tecnico del archivo anterior: administrador.
 
 ## Cloud Functions principales
 
@@ -173,6 +209,7 @@ flutter pub get
 flutter analyze
 flutter build web
 firebase deploy --only firestore --project frontacueductonewzenda
+firebase deploy --only storage --project frontacueductonewzenda
 firebase deploy --only functions --project frontacueductonewzenda
 firebase deploy --only hosting --project frontacueductonewzenda
 ```
@@ -189,6 +226,23 @@ powershell -ExecutionPolicy Bypass -File scripts\flutter_analyze_safe.ps1 -Targe
 - Hosting: `https://frontacueductonewzenda.web.app`
 - Rama principal: `main`
 
+## Documentacion de entrega
+
+La carpeta `documentacion de entrega` contiene manuales por modulo y por perfil:
+
+- `usuarios.md`
+- `consumos.md`
+- `cuentas.md`
+- `facturacion.md`
+- `gastos.md`
+- `reportes.md`
+- `manual administrador.md`
+- `manual operador.md`
+- `manual cliente.md`
+- `manual contador.md`
+- `manual fiscal.md`
+- `manual tesorero.md`
+
 ## Estado de entrega
 
-Actualizado el 2026-05-06. El sistema queda desplegado y alineado con los modulos actuales de Usuarios, Consumos, Cuentas, Facturacion y Reportes.
+Actualizado el 2026-05-21. El sistema queda desplegado y alineado con los modulos actuales de Usuarios, Consumos, Cuentas, Facturacion, Gastos y Reportes.

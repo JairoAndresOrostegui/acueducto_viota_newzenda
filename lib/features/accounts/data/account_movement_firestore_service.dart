@@ -7,7 +7,7 @@ import '../domain/account_movement.dart';
 
 class AccountMovementFirestoreService {
   AccountMovementFirestoreService({FirebaseFirestore? firestore})
-      : _firestore = firestore;
+    : _firestore = firestore;
 
   final FirebaseFirestore? _firestore;
 
@@ -32,16 +32,17 @@ class AccountMovementFirestoreService {
       query = query.where('periodo', isEqualTo: periodo!.trim());
     }
     final snapshot = await query.limit(limit).get();
-    final items = snapshot.docs
-        .map((doc) => AccountMovement.fromFirestore(doc.id, doc.data()))
-        .toList()
-      ..sort((a, b) {
-        final periodCompare = a.periodo.compareTo(b.periodo);
-        if (periodCompare != 0) {
-          return periodCompare;
-        }
-        return a.fecha.compareTo(b.fecha);
-      });
+    final items =
+        snapshot.docs
+            .map((doc) => AccountMovement.fromFirestore(doc.id, doc.data()))
+            .toList()
+          ..sort((a, b) {
+            final periodCompare = a.periodo.compareTo(b.periodo);
+            if (periodCompare != 0) {
+              return periodCompare;
+            }
+            return a.fecha.compareTo(b.fecha);
+          });
     return items;
   }
 
@@ -68,6 +69,33 @@ class AccountMovementFirestoreService {
         continue;
       }
       balances[code] = (balances[code] ?? 0) + movement.valor;
+    }
+    return balances;
+  }
+
+  Future<Map<String, int>> fetchMeterBalancesBeforePeriod({
+    required String periodId,
+    required Iterable<String> meterCodes,
+  }) async {
+    final normalizedMeters = meterCodes
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    if (normalizedMeters.isEmpty) {
+      return const {};
+    }
+
+    final snapshot = await _collection
+        .where('periodo', isLessThan: periodId.trim())
+        .get();
+    final balances = <String, int>{};
+    for (final doc in snapshot.docs) {
+      final movement = AccountMovement.fromFirestore(doc.id, doc.data());
+      final meter = movement.codigoContador.trim();
+      if (!normalizedMeters.contains(meter)) {
+        continue;
+      }
+      balances[meter] = (balances[meter] ?? 0) + movement.valor;
     }
     return balances;
   }
@@ -115,8 +143,7 @@ class AccountMovementFirestoreService {
     final now = paidAt ?? DateTime.now();
     final isPayment = deltaPaidAmount > 0;
     final movement = AccountMovement(
-      id:
-          '${isPayment ? 'pago' : 'reverso_pago'}_${invoice.periodo}_${invoice.codigoContador}_${now.microsecondsSinceEpoch}',
+      id: '${isPayment ? 'pago' : 'reverso_pago'}_${invoice.periodo}_${invoice.codigoContador}_${now.microsecondsSinceEpoch}',
       tipo: isPayment ? 'pago' : 'reverso_pago',
       codigoUsuario: _normalizeUserCode(invoice.codigoUsuario),
       codigoContador: invoice.codigoContador,
