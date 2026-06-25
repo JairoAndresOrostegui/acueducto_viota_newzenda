@@ -28,8 +28,8 @@ class _BillingValuesAdminPageState extends State<BillingValuesAdminPage> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<BillingValueConfig?>(
-      stream: _service.watchActiveItem(),
+    return StreamBuilder<List<BillingValueConfig>>(
+      stream: _service.watchActiveItems(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -42,32 +42,35 @@ class _BillingValuesAdminPageState extends State<BillingValuesAdminPage> {
           }
         }
 
-        final activeItem = snapshot.data;
-
+        final activeItems = snapshot.data ?? const <BillingValueConfig>[];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Header(
-              hasActiveConfig: activeItem != null,
-              versionLabel: activeItem == null
+              hasActiveConfig: activeItems.isNotEmpty,
+              versionLabel: activeItems.isEmpty
                   ? null
-                  : 'Versión ${activeItem.version}',
-              onCreate: () => _openForm(item: activeItem),
+                  : '${activeItems.length} vigencia${activeItems.length == 1 ? '' : 's'} activa${activeItems.length == 1 ? '' : 's'}',
+              onCreate: () => _openForm(),
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: activeItem == null
+              child: activeItems.isEmpty
                   ? const Center(
                       child: Text(
                         'Aún no hay una configuración activa de valores.',
                       ),
                     )
                   : ListView(
+                      padding: const EdgeInsets.only(bottom: 24),
                       children: [
-                        _BillingValueCard(
-                          item: activeItem,
-                          onEdit: () => _openForm(item: activeItem),
-                        ),
+                        for (final item in activeItems) ...[
+                          _BillingValueCard(
+                            item: item,
+                            onEdit: () => _openForm(item: item),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                       ],
                     ),
             ),
@@ -138,14 +141,12 @@ class _Header extends StatelessWidget {
               ? 'Configuración vigente: ${versionLabel ?? 'Activa'}'
               : 'Sin configuración vigente.',
         ),
-        if (!hasActiveConfig) ...[
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: onCreate,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Crear valores'),
-          ),
-        ],
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: onCreate,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(hasActiveConfig ? 'Nueva vigencia' : 'Crear valores'),
+        ),
       ],
     );
   }

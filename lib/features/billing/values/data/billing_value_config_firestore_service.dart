@@ -13,6 +13,30 @@ class BillingValueConfigFirestoreService {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _db.collection('valores_facturacion');
 
+  Stream<List<BillingValueConfig>> watchActiveItems() {
+    return _collection
+        .orderBy('fechaCreacion', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+          final items =
+              snapshot.docs
+                  .map(BillingValueConfig.fromFirestore)
+                  .where((item) => item.isActive)
+                  .toList()
+                ..sort((a, b) {
+                  final periodCompare = b.periodoInicio.compareTo(
+                    a.periodoInicio,
+                  );
+                  if (periodCompare != 0) {
+                    return periodCompare;
+                  }
+                  return b.fechaCreacion.compareTo(a.fechaCreacion);
+                });
+          return items;
+        });
+  }
+
   Stream<BillingValueConfig?> watchActiveItem() {
     return _collection
         .orderBy('fechaCreacion', descending: true)
@@ -54,7 +78,9 @@ class BillingValueConfigFirestoreService {
     final items =
         snapshot.docs
             .map(BillingValueConfig.fromFirestore)
-            .where((item) => item.appliesToPeriod(normalizedPeriod))
+            .where(
+              (item) => item.isActive && item.appliesToPeriod(normalizedPeriod),
+            )
             .toList()
           ..sort((a, b) {
             final periodCompare = b.periodoInicio.compareTo(a.periodoInicio);
