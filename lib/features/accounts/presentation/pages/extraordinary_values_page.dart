@@ -147,11 +147,10 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
                       onSearchChanged: (value) =>
                           setState(() => _hasSearched = false),
                       onSearch: _search,
-                      onScopeChanged: (value) =>
-                          setState(() {
-                            _scopeFilter = value;
-                            _hasSearched = false;
-                          }),
+                      onScopeChanged: (value) => setState(() {
+                        _scopeFilter = value;
+                        _hasSearched = false;
+                      }),
                       onPeriodChanged: (value) => setState(() {
                         _periodFilter = value;
                         _hasSearched = false;
@@ -233,7 +232,8 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
 
     return List.generate(values.length, (index) {
       final value = values[index];
-      final ref = clientsByCode[(value.codigoUsuario ?? '').trim().toUpperCase()];
+      final ref =
+          clientsByCode[(value.codigoUsuario ?? '').trim().toUpperCase()];
       return _ExtraordinaryRow(
         originalIndex: index,
         value: value,
@@ -305,7 +305,9 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar extraordinario'),
-        content: const Text('Se quitara este cargo de la configuracion activa.'),
+        content: const Text(
+          'Se quitara este cargo de la configuracion activa.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -335,6 +337,8 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       id: 'valor_facturacion_${now.microsecondsSinceEpoch}',
       estado: 'activo',
       version: activeItem.version + 1,
+      periodoInicio: activeItem.periodoInicio,
+      periodoInicioNombre: activeItem.periodoInicioNombre,
       cargoFijo: activeItem.cargoFijo,
       reconexion: activeItem.reconexion,
       rangos: activeItem.rangos,
@@ -357,9 +361,9 @@ class _ExtraordinaryValuesPageState extends State<ExtraordinaryValuesPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No fue posible guardar: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No fue posible guardar: $error')));
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -404,7 +408,10 @@ class _Header extends StatelessWidget {
               spacing: 10,
               runSpacing: 10,
               children: [
-                _SummaryChip(label: 'Registros', value: '$filteredCount/$totalCount'),
+                _SummaryChip(
+                  label: 'Registros',
+                  value: '$filteredCount/$totalCount',
+                ),
                 _SummaryChip(
                   label: 'Valor filtrado',
                   value: _formatCurrency(filteredAmount),
@@ -506,9 +513,7 @@ class _Filters extends StatelessWidget {
               const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: onSearch,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 56),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 56)),
                 icon: const Icon(Icons.search_rounded),
                 label: const Text('Buscar'),
               ),
@@ -548,14 +553,14 @@ class _Filters extends StatelessWidget {
                   decoration: const InputDecoration(labelText: 'Periodo'),
                   items: periods
                       .map(
-                      (period) => DropdownMenuItem<String?>(
-                        value: period.id,
-                        child: Text(
-                          _displayPeriod(period),
-                          overflow: TextOverflow.ellipsis,
+                        (period) => DropdownMenuItem<String?>(
+                          value: period.id,
+                          child: Text(
+                            _displayPeriod(period),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    )
+                      )
                       .toList(),
                   onChanged: onPeriodChanged,
                 ),
@@ -584,7 +589,9 @@ class _ExtraordinaryCard extends StatelessWidget {
     final item = row.value;
     final ref = row.clientReference;
     final scopeLabel = item.isMassive ? 'Masivo' : 'Individual';
-    final title = item.concepto.trim().isEmpty ? 'Extraordinario' : item.concepto;
+    final title = item.concepto.trim().isEmpty
+        ? 'Extraordinario'
+        : item.concepto;
     final target = item.isMassive
         ? 'Todos los usuarios'
         : ref == null
@@ -614,7 +621,13 @@ class _ExtraordinaryCard extends StatelessWidget {
                 children: [
                   Text(title, style: Theme.of(context).textTheme.titleMedium),
                   Chip(label: Text(scopeLabel)),
-                  Chip(label: Text(item.periodoNombre.isEmpty ? item.periodoId : item.periodoNombre)),
+                  Chip(
+                    label: Text(
+                      item.periodoNombre.isEmpty
+                          ? item.periodoId
+                          : item.periodoNombre,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -634,17 +647,13 @@ class _ExtraordinaryCard extends StatelessWidget {
             children: [
               OutlinedButton.icon(
                 onPressed: onEdit,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                ),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
               ),
               OutlinedButton.icon(
                 onPressed: onDelete,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                ),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                 icon: const Icon(Icons.delete_outline_rounded),
                 label: const Text('Eliminar'),
               ),
@@ -749,7 +758,9 @@ class _ExtraordinaryFormDialogState extends State<_ExtraordinaryFormDialog> {
                         child: DropdownButtonFormField<String>(
                           isExpanded: true,
                           initialValue: _periodId,
-                          decoration: const InputDecoration(labelText: 'Periodo'),
+                          decoration: const InputDecoration(
+                            labelText: 'Periodo',
+                          ),
                           items: widget.periods
                               .map(
                                 (period) => DropdownMenuItem<String>(
@@ -761,9 +772,9 @@ class _ExtraordinaryFormDialogState extends State<_ExtraordinaryFormDialog> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) => setState(() => _periodId = value),
-                          validator: (value) =>
-                              (value ?? '').trim().isEmpty
+                          onChanged: (value) =>
+                              setState(() => _periodId = value),
+                          validator: (value) => (value ?? '').trim().isEmpty
                               ? 'Selecciona un periodo.'
                               : null,
                         ),
@@ -805,7 +816,9 @@ class _ExtraordinaryFormDialogState extends State<_ExtraordinaryFormDialog> {
                                   controller: _clientNameSearchController,
                                   decoration: const InputDecoration(
                                     labelText: 'Buscar por nombre',
-                                    prefixIcon: Icon(Icons.person_search_rounded),
+                                    prefixIcon: Icon(
+                                      Icons.person_search_rounded,
+                                    ),
                                   ),
                                   onChanged: (_) => setState(() {}),
                                 ),
@@ -879,9 +892,9 @@ class _ExtraordinaryFormDialogState extends State<_ExtraordinaryFormDialog> {
                                     child: Text(
                                       field.errorText!,
                                       style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .error,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
                                       ),
                                     ),
                                   )
@@ -896,7 +909,8 @@ class _ExtraordinaryFormDialogState extends State<_ExtraordinaryFormDialog> {
                     controller: _conceptController,
                     decoration: const InputDecoration(
                       labelText: 'Concepto',
-                      hintText: 'Saldo anterior, cuota extraordinaria, multa...',
+                      hintText:
+                          'Saldo anterior, cuota extraordinaria, multa...',
                     ),
                     validator: (value) => (value ?? '').trim().isEmpty
                         ? 'Campo obligatorio.'
@@ -968,7 +982,9 @@ class _ExtraordinaryFormDialogState extends State<_ExtraordinaryFormDialog> {
       }
       if (sectorQuery.isNotEmpty &&
           !item.code.sector.toLowerCase().contains(sectorQuery) &&
-          !_displaySector(item.code.sector).toLowerCase().contains(sectorQuery)) {
+          !_displaySector(
+            item.code.sector,
+          ).toLowerCase().contains(sectorQuery)) {
         return false;
       }
       return true;
@@ -1034,9 +1050,9 @@ class _SelectedClientPreview extends StatelessWidget {
       ),
       child: Text(
         'Seleccionado: ${toDisplayUserName(item.client.nombre)} - ${item.code.codigoUsuario} - ${_displaySector(item.code.sector)}',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }

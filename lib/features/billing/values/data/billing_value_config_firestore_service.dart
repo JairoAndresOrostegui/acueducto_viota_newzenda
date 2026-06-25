@@ -4,7 +4,7 @@ import '../domain/billing_value_config.dart';
 
 class BillingValueConfigFirestoreService {
   BillingValueConfigFirestoreService({FirebaseFirestore? firestore})
-      : _firestore = firestore;
+    : _firestore = firestore;
 
   final FirebaseFirestore? _firestore;
 
@@ -43,6 +43,32 @@ class BillingValueConfigFirestoreService {
     return null;
   }
 
+  Future<BillingValueConfig?> fetchApplicableItemForPeriod(
+    String periodId,
+  ) async {
+    final normalizedPeriod = periodId.trim();
+    final snapshot = await _collection
+        .orderBy('fechaCreacion', descending: true)
+        .limit(100)
+        .get();
+    final items =
+        snapshot.docs
+            .map(BillingValueConfig.fromFirestore)
+            .where((item) => item.appliesToPeriod(normalizedPeriod))
+            .toList()
+          ..sort((a, b) {
+            final periodCompare = b.periodoInicio.compareTo(a.periodoInicio);
+            if (periodCompare != 0) {
+              return periodCompare;
+            }
+            return b.fechaCreacion.compareTo(a.fechaCreacion);
+          });
+    if (items.isNotEmpty) {
+      return items.first;
+    }
+    return fetchActiveItem();
+  }
+
   Future<void> saveNewVersion({
     required BillingValueConfig item,
     BillingValueConfig? previousActive,
@@ -54,7 +80,11 @@ class BillingValueConfigFirestoreService {
         'fechaActualizacion': FieldValue.serverTimestamp(),
       });
     }
-    batch.set(_collection.doc(item.id), item.toFirestore(), SetOptions(merge: true));
+    batch.set(
+      _collection.doc(item.id),
+      item.toFirestore(),
+      SetOptions(merge: true),
+    );
     await batch.commit();
   }
 }

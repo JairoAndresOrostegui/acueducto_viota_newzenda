@@ -49,7 +49,9 @@ class _BillingValuesAdminPageState extends State<BillingValuesAdminPage> {
           children: [
             _Header(
               hasActiveConfig: activeItem != null,
-              versionLabel: activeItem == null ? null : 'Versión ${activeItem.version}',
+              versionLabel: activeItem == null
+                  ? null
+                  : 'Versión ${activeItem.version}',
               onCreate: () => _openForm(item: activeItem),
             ),
             const SizedBox(height: 16),
@@ -79,10 +81,8 @@ class _BillingValuesAdminPageState extends State<BillingValuesAdminPage> {
     final result = await showDialog<BillingValueConfig>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _BillingValueDialog(
-        item: item,
-        currentUser: widget.currentUser,
-      ),
+      builder: (context) =>
+          _BillingValueDialog(item: item, currentUser: widget.currentUser),
     );
 
     if (result == null) {
@@ -90,10 +90,7 @@ class _BillingValuesAdminPageState extends State<BillingValuesAdminPage> {
     }
 
     try {
-      await _service.saveNewVersion(
-        item: result,
-        previousActive: item,
-      );
+      await _service.saveNewVersion(item: result, previousActive: item);
       if (!mounted) {
         return;
       }
@@ -106,12 +103,11 @@ class _BillingValuesAdminPageState extends State<BillingValuesAdminPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No fue posible guardar: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No fue posible guardar: $error')));
     }
   }
-
 }
 
 class _Header extends StatelessWidget {
@@ -130,10 +126,7 @@ class _Header extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Valores',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
+        Text('Valores', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 8),
         Text(
           'Configura cargo fijo, valor por consumo en rangos y reconexión para la facturación.',
@@ -159,10 +152,7 @@ class _Header extends StatelessWidget {
 }
 
 class _BillingValueDialog extends StatefulWidget {
-  const _BillingValueDialog({
-    required this.currentUser,
-    this.item,
-  });
+  const _BillingValueDialog({required this.currentUser, this.item});
 
   final BillingValueConfig? item;
   final AppUser currentUser;
@@ -178,6 +168,14 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
   late final TextEditingController _reconexionController;
   late final List<_RangeFormRow> _rangeRows;
   late final List<_AdditionalValueFormRow> _additionalRows;
+  late String? _periodoInicio =
+      widget.item?.periodoInicio.trim().isEmpty == true
+      ? null
+      : widget.item?.periodoInicio;
+  late String? _periodoInicioNombre =
+      widget.item?.periodoInicioNombre.trim().isEmpty == true
+      ? null
+      : widget.item?.periodoInicioNombre;
 
   bool get _isEditing => widget.item != null;
   bool get _showAdditionalValuesSection => false;
@@ -237,10 +235,12 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Define los valores base y los rangos de consumo. El último rango puede quedar sin límite superior.',
+                    'Define desde que periodo aplican los valores base y los rangos de consumo. El ultimo rango puede quedar sin limite superior.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 20),
+                  _buildEffectivePeriodField(),
+                  const SizedBox(height: 16),
                   Wrap(
                     spacing: 16,
                     runSpacing: 16,
@@ -283,32 +283,32 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                   const SizedBox(height: 12),
                   ..._buildRangeRows(),
                   if (_showAdditionalValuesSection) ...[
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Valores adicionales',
-                          style: Theme.of(context).textTheme.titleLarge,
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Valores adicionales',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
                         ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _addAdditionalValue,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 44),
+                        OutlinedButton.icon(
+                          onPressed: _addAdditionalValue,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 44),
+                          ),
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Agregar valor'),
                         ),
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('Agregar valor'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Primero selecciona el periodo. Si el valor es masivo aplica a todos; si es individual se pide el código de usuario.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildAdditionalRows(),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Primero selecciona el periodo. Si el valor es masivo aplica a todos; si es individual se pide el código de usuario.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAdditionalRows(),
                   ],
                   const SizedBox(height: 24),
                   Wrap(
@@ -342,7 +342,9 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
     return List<Widget>.generate(_rangeRows.length, (index) {
       final row = _rangeRows[index];
       return Padding(
-        padding: EdgeInsets.only(bottom: index == _rangeRows.length - 1 ? 0 : 12),
+        padding: EdgeInsets.only(
+          bottom: index == _rangeRows.length - 1 ? 0 : 12,
+        ),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -404,6 +406,60 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
     });
   }
 
+  Widget _buildEffectivePeriodField() {
+    return FutureBuilder<List<BillingPeriod>>(
+      future: _periodsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return Text(
+            'No fue posible cargar los periodos.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.error),
+          );
+        }
+        final periods = snapshot.data ?? const <BillingPeriod>[];
+        return SizedBox(
+          width: 300,
+          child: DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: periods.any((period) => period.id == _periodoInicio)
+                ? _periodoInicio
+                : null,
+            decoration: const InputDecoration(labelText: 'Aplica desde'),
+            items: periods
+                .map(
+                  (period) => DropdownMenuItem<String>(
+                    value: period.id,
+                    child: Text(
+                      _displayPeriod(period),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              final period = periods.firstWhere((item) => item.id == value);
+              setState(() {
+                _periodoInicio = period.id;
+                _periodoInicioNombre = period.nombre;
+              });
+            },
+            validator: (value) => (value ?? '').trim().isEmpty
+                ? 'Selecciona desde que periodo aplica.'
+                : null,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAdditionalRows() {
     if (_additionalRows.isEmpty) {
       return Container(
@@ -433,18 +489,18 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
         if (snapshot.hasError) {
           return Text(
             'No fue posible cargar los periodos para los valores adicionales.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.error,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.error),
           );
         }
         final periods = snapshot.data ?? const <BillingPeriod>[];
         if (periods.isEmpty) {
           return Text(
             'Primero debes crear al menos un periodo para asignar valores adicionales.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.error,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.error),
           );
         }
 
@@ -488,9 +544,10 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                           width: 260,
                           child: DropdownButtonFormField<String>(
                             isExpanded: true,
-                            initialValue: periods.any(
-                              (period) => period.id == row.periodoId,
-                            )
+                            initialValue:
+                                periods.any(
+                                  (period) => period.id == row.periodoId,
+                                )
                                 ? row.periodoId
                                 : null,
                             decoration: const InputDecoration(
@@ -572,8 +629,9 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                           width: 280,
                           child: TextFormField(
                             controller: row.conceptoController,
-                            decoration:
-                                const InputDecoration(labelText: 'Concepto'),
+                            decoration: const InputDecoration(
+                              labelText: 'Concepto',
+                            ),
                             validator: (value) =>
                                 _validateAdditionalConcept(row, value),
                           ),
@@ -598,8 +656,9 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            decoration:
-                                const InputDecoration(labelText: 'Valor'),
+                            decoration: const InputDecoration(
+                              labelText: 'Valor',
+                            ),
                             validator: (value) =>
                                 _validateAdditionalAmount(row, value),
                           ),
@@ -796,7 +855,8 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
             periodoNombre: row.periodoNombre ?? row.periodoId!,
             concepto: row.conceptoController.text.trim(),
             valor: int.parse(row.valorController.text.trim()),
-            codigoUsuario: !row.isIndividual ||
+            codigoUsuario:
+                !row.isIndividual ||
                     row.codigoUsuarioController.text.trim().isEmpty
                 ? null
                 : row.codigoUsuarioController.text.trim(),
@@ -809,6 +869,8 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
       id: _buildId(now),
       estado: 'activo',
       version: (widget.item?.version ?? 0) + 1,
+      periodoInicio: _periodoInicio!.trim(),
+      periodoInicioNombre: _periodoInicioNombre ?? _periodoInicio!.trim(),
       cargoFijo: int.parse(_cargoFijoController.text.trim()),
       reconexion: int.parse(_reconexionController.text.trim()),
       rangos: ranges,
@@ -870,10 +932,7 @@ class _BillingValueDialogState extends State<_BillingValueDialog> {
 }
 
 class _BillingValueCard extends StatelessWidget {
-  const _BillingValueCard({
-    required this.item,
-    required this.onEdit,
-  });
+  const _BillingValueCard({required this.item, required this.onEdit});
 
   final BillingValueConfig item;
   final VoidCallback onEdit;
@@ -900,13 +959,13 @@ class _BillingValueCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 'Reconexión: ${_formatCurrency(item.reconexion)}',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: AppColors.textPrimary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppColors.textPrimary),
               ),
               const SizedBox(height: 6),
               Text(
-                'Versión ${item.version} · ${item.estado} · Actualizado por ${item.actorNombre}',
+                'Version ${item.version} - ${item.estado} - Aplica desde ${item.periodoInicio.isEmpty ? 'sin definir' : item.periodoInicio} - Actualizado por ${item.actorNombre}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 14),
@@ -950,9 +1009,7 @@ class _BillingValueCard extends StatelessWidget {
             children: [
               OutlinedButton.icon(
                 onPressed: onEdit,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                ),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Actualizar'),
               ),
@@ -962,11 +1019,7 @@ class _BillingValueCard extends StatelessWidget {
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                info,
-                const SizedBox(height: 16),
-                actions,
-              ],
+              children: [info, const SizedBox(height: 16), actions],
             );
           }
 
@@ -1007,9 +1060,9 @@ class _RangeFormRow {
     String desde = '',
     String hasta = '',
     String valorUnitario = '',
-  })  : desdeController = TextEditingController(text: desde),
-        hastaController = TextEditingController(text: hasta),
-        valorUnitarioController = TextEditingController(text: valorUnitario);
+  }) : desdeController = TextEditingController(text: desde),
+       hastaController = TextEditingController(text: hasta),
+       valorUnitarioController = TextEditingController(text: valorUnitario);
 
   factory _RangeFormRow.fromRange(ConsumptionRange range) {
     return _RangeFormRow(
@@ -1038,9 +1091,9 @@ class _AdditionalValueFormRow {
     String concepto = '',
     String codigoUsuario = '',
     String valor = '',
-  })  : conceptoController = TextEditingController(text: concepto),
-        codigoUsuarioController = TextEditingController(text: codigoUsuario),
-        valorController = TextEditingController(text: valor);
+  }) : conceptoController = TextEditingController(text: concepto),
+       codigoUsuarioController = TextEditingController(text: codigoUsuario),
+       valorController = TextEditingController(text: valor);
 
   factory _AdditionalValueFormRow.fromValue(AdditionalBillingValue value) {
     return _AdditionalValueFormRow(

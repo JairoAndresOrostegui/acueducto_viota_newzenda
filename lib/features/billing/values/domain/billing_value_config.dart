@@ -12,11 +12,7 @@ class ConsumptionRange {
   final int valorUnitario;
 
   Map<String, dynamic> toMap() {
-    return {
-      'desde': desde,
-      'hasta': hasta,
-      'valorUnitario': valorUnitario,
-    };
+    return {'desde': desde, 'hasta': hasta, 'valorUnitario': valorUnitario};
   }
 
   factory ConsumptionRange.fromMap(Map<String, dynamic> data) {
@@ -45,10 +41,7 @@ class AdditionalBillingValue {
 
   bool get isMassive => (codigoUsuario ?? '').trim().isEmpty;
 
-  bool appliesTo({
-    required String periodId,
-    required String userCode,
-  }) {
+  bool appliesTo({required String periodId, required String userCode}) {
     if (periodoId.trim() != periodId.trim()) {
       return false;
     }
@@ -82,6 +75,8 @@ class BillingValueConfig {
     required this.id,
     required this.estado,
     required this.version,
+    required this.periodoInicio,
+    required this.periodoInicioNombre,
     required this.cargoFijo,
     required this.reconexion,
     required this.rangos,
@@ -95,6 +90,8 @@ class BillingValueConfig {
   final String id;
   final String estado;
   final int version;
+  final String periodoInicio;
+  final String periodoInicioNombre;
   final int cargoFijo;
   final int reconexion;
   final List<ConsumptionRange> rangos;
@@ -105,6 +102,11 @@ class BillingValueConfig {
   final DateTime? fechaActualizacion;
 
   bool get isActive => estado == 'activo';
+
+  bool appliesToPeriod(String periodId) {
+    final start = periodoInicio.trim();
+    return start.isEmpty || start.compareTo(periodId.trim()) <= 0;
+  }
 
   factory BillingValueConfig.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -130,6 +132,8 @@ class BillingValueConfig {
       id: doc.id,
       estado: data['estado'] as String? ?? 'activo',
       version: data['version'] as int? ?? 1,
+      periodoInicio: data['periodoInicio'] as String? ?? '',
+      periodoInicioNombre: data['periodoInicioNombre'] as String? ?? '',
       cargoFijo: data['cargoFijo'] as int? ?? 0,
       reconexion: data['reconexion'] as int? ?? 0,
       rangos: ranges,
@@ -145,11 +149,14 @@ class BillingValueConfig {
     return {
       'estado': estado,
       'version': version,
+      'periodoInicio': periodoInicio,
+      'periodoInicioNombre': periodoInicioNombre,
       'cargoFijo': cargoFijo,
       'reconexion': reconexion,
       'rangos': rangos.map((item) => item.toMap()).toList(),
-      'valoresAdicionales':
-          valoresAdicionales.map((item) => item.toMap()).toList(),
+      'valoresAdicionales': valoresAdicionales
+          .map((item) => item.toMap())
+          .toList(),
       'actorUid': actorUid,
       'actorNombre': actorNombre,
       'fechaCreacion': Timestamp.fromDate(fechaCreacion),

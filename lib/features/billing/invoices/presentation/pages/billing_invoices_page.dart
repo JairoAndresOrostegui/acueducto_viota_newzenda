@@ -36,7 +36,6 @@ class BillingInvoicesPage extends StatefulWidget {
 }
 
 class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
-
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
   late final ConsumptionFirestoreService _consumptionService =
@@ -64,18 +63,14 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
   List<ConsumptionReading> get _billableReadings => _readings
       .where(
         (item) =>
-            _isReadingReadyForBilling(item) &&
-            !item.facturado &&
-            !item.pagado,
+            _isReadingReadyForBilling(item) && !item.facturado && !item.pagado,
       )
       .toList();
 
   List<ConsumptionReading> get _unpreparedReadings => _readings
       .where(
         (item) =>
-            !item.facturado &&
-            !item.pagado &&
-            !_isReadingReadyForBilling(item),
+            !item.facturado && !item.pagado && !_isReadingReadyForBilling(item),
       )
       .toList();
 
@@ -85,15 +80,18 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     if (query.isEmpty) {
       return readings;
     }
-    return readings.where((item) => _matchesReadingSearch(item, query)).toList();
+    return readings
+        .where((item) => _matchesReadingSearch(item, query))
+        .toList();
   }
 
-  List<String> get _availableSectors => _invoices
-      .map((item) => _displaySector(item.sector))
-      .where((item) => item.isNotEmpty && item != 'No registrado')
-      .toSet()
-      .toList()
-    ..sort();
+  List<String> get _availableSectors =>
+      _invoices
+          .map((item) => _displaySector(item.sector))
+          .where((item) => item.isNotEmpty && item != 'No registrado')
+          .toSet()
+          .toList()
+        ..sort();
 
   List<Invoice> get _filteredInvoices {
     final sector = _selectedSectorFilter;
@@ -207,7 +205,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
     setState(() => _saving = true);
     try {
-      final values = await _valueService.fetchActiveItem();
+      final values = await _valueService.fetchApplicableItemForPeriod(
+        period.id,
+      );
       if (values == null) {
         throw StateError('No hay configuracion activa de valores.');
       }
@@ -254,7 +254,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
     setState(() => _saving = true);
     try {
-      final values = await _valueService.fetchActiveItem();
+      final values = await _valueService.fetchApplicableItemForPeriod(
+        period.id,
+      );
       if (values == null) {
         throw StateError('No hay configuracion activa de valores.');
       }
@@ -269,9 +271,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recibo generado.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Recibo generado.')));
       await _loadPeriodData(period);
     } catch (error) {
       if (!mounted) {
@@ -297,7 +299,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       builder: (context) => AlertDialog(
         title: const Text('Regenerar recibos'),
         content: const Text(
-          'Se regeneraran solo los recibos no pagados del periodo seleccionado con los valores vigentes. Los recibos pagados no se modificaran.',
+          'Se regeneraran solo los recibos no pagados del periodo seleccionado con los valores aplicables a ese periodo. Los recibos pagados no se modificaran.',
         ),
         actions: [
           TextButton(
@@ -317,7 +319,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
     setState(() => _saving = true);
     try {
-      final values = await _valueService.fetchActiveItem();
+      final values = await _valueService.fetchApplicableItemForPeriod(
+        period.id,
+      );
       if (values == null) {
         throw StateError('No hay configuracion activa de valores.');
       }
@@ -363,7 +367,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       builder: (context) => AlertDialog(
         title: const Text('Regenerar recibo'),
         content: Text(
-          'Se regenerara el recibo de ${toDisplayUserName(invoice.nombreUsuario)} con los valores vigentes. Los recibos pagados no se pueden modificar.',
+          'Se regenerara el recibo de ${toDisplayUserName(invoice.nombreUsuario)} con los valores aplicables a ${period.id}. Los recibos pagados no se pueden modificar.',
         ),
         actions: [
           TextButton(
@@ -383,7 +387,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
 
     setState(() => _saving = true);
     try {
-      final values = await _valueService.fetchActiveItem();
+      final values = await _valueService.fetchApplicableItemForPeriod(
+        period.id,
+      );
       if (values == null) {
         throw StateError('No hay configuracion activa de valores.');
       }
@@ -398,9 +404,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recibo regenerado.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Recibo regenerado.')));
       await _loadPeriodData(period);
     } catch (error) {
       if (!mounted) {
@@ -640,7 +646,9 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                               children: [
                                 Text(
                                   toDisplayUserName(item.nombreUsuario),
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -694,9 +702,7 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
         .replaceAll('_', ' ')
         .split(RegExp(r'\s+'))
         .where((item) => item.isNotEmpty)
-        .map(
-          (item) => item[0].toUpperCase() + item.substring(1).toLowerCase(),
-        )
+        .map((item) => item[0].toUpperCase() + item.substring(1).toLowerCase())
         .join(' ');
   }
 
@@ -726,32 +732,30 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
     final invoicesList = _loading
         ? const Center(child: CircularProgressIndicator())
         : billableReadings.isEmpty && _invoices.isEmpty
-            ? const Center(
-                child: Text(
-                  'No hay recibos generados para este periodo.',
-                ),
-              )
-            : ListView.separated(
-                itemCount: totalItems,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  if (index < billableReadings.length) {
-                    final reading = billableReadings[index];
-                    return _BillableReadingCard(
-                      reading: reading,
-                      onGenerate: () => _generateInvoiceForReading(reading),
-                    );
-                  }
-                  final invoice = filteredInvoices[index - billableReadings.length];
-                  return _InvoicePreviewCard(
-                    invoice: invoice,
-                    onPrint: () => _printInvoice(invoice),
-                    onRegenerate: invoice.estaPagado
-                        ? null
-                        : () => _regenerateInvoice(invoice),
-                  );
-                },
+        ? const Center(
+            child: Text('No hay recibos generados para este periodo.'),
+          )
+        : ListView.separated(
+            itemCount: totalItems,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              if (index < billableReadings.length) {
+                final reading = billableReadings[index];
+                return _BillableReadingCard(
+                  reading: reading,
+                  onGenerate: () => _generateInvoiceForReading(reading),
+                );
+              }
+              final invoice = filteredInvoices[index - billableReadings.length];
+              return _InvoicePreviewCard(
+                invoice: invoice,
+                onPrint: () => _printInvoice(invoice),
+                onRegenerate: invoice.estaPagado
+                    ? null
+                    : () => _regenerateInvoice(invoice),
               );
+            },
+          );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -765,96 +769,100 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
               AbsorbPointer(
                 absorbing: _saving,
                 child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _HeaderPanel(
-                periods: _periods,
-                selectedPeriod: _selectedPeriod,
-                billableCount: billableReadings.length,
-                invoiceCount: _invoices.length,
-                unpreparedCount: unpreparedReadings.length,
-                onPeriodChanged: (period) {
-                  if (period != null) {
-                    _loadPeriodData(period);
-                  }
-                },
-                onGenerate:
-                    billableReadings.isEmpty || _saving ? null : _generateInvoices,
-                onRegenerate: _invoices.isEmpty || _saving
-                    ? null
-                    : _regenerateInvoices,
-                onExportPeriod: _invoices.isEmpty || _saving
-                    ? null
-                    : _exportPeriodInvoicesUnified,
-                onExportSector: _invoices.isEmpty || availableSectors.isEmpty || _saving
-                    ? null
-                    : _exportSectorInvoicesUnified,
-                onShowUnprepared: unpreparedReadings.isEmpty
-                    ? null
-                    : _showUnpreparedReadings,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _search = value.trim()),
-                decoration: InputDecoration(
-                  labelText: 'Buscar en facturacion',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _search.isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _search = '');
-                          },
-                          tooltip: 'Limpiar busqueda',
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _InvoiceSearchFieldSelector(
-                selected: _searchField,
-                onChanged: (value) => setState(() => _searchField = value),
-              ),
-              const SizedBox(height: 12),
-              if (availableSectors.isNotEmpty) ...[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ChoiceChip(
-                      label: const Text('Todos los sectores'),
-                      selected: _selectedSectorFilter == null,
-                      onSelected: (_) {
-                        setState(() => _selectedSectorFilter = null);
+                    _HeaderPanel(
+                      periods: _periods,
+                      selectedPeriod: _selectedPeriod,
+                      billableCount: billableReadings.length,
+                      invoiceCount: _invoices.length,
+                      unpreparedCount: unpreparedReadings.length,
+                      onPeriodChanged: (period) {
+                        if (period != null) {
+                          _loadPeriodData(period);
+                        }
                       },
+                      onGenerate: billableReadings.isEmpty || _saving
+                          ? null
+                          : _generateInvoices,
+                      onRegenerate: _invoices.isEmpty || _saving
+                          ? null
+                          : _regenerateInvoices,
+                      onExportPeriod: _invoices.isEmpty || _saving
+                          ? null
+                          : _exportPeriodInvoicesUnified,
+                      onExportSector:
+                          _invoices.isEmpty ||
+                              availableSectors.isEmpty ||
+                              _saving
+                          ? null
+                          : _exportSectorInvoicesUnified,
+                      onShowUnprepared: unpreparedReadings.isEmpty
+                          ? null
+                          : _showUnpreparedReadings,
                     ),
-                    ...availableSectors.map(
-                      (sector) => ChoiceChip(
-                        label: Text(sector),
-                        selected: _selectedSectorFilter == sector,
-                        onSelected: (_) {
-                          setState(() => _selectedSectorFilter = sector);
-                        },
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (value) =>
+                          setState(() => _search = value.trim()),
+                      decoration: InputDecoration(
+                        labelText: 'Buscar en facturacion',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _search.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _search = '');
+                                },
+                                tooltip: 'Limpiar busqueda',
+                                icon: const Icon(Icons.close_rounded),
+                              ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    _InvoiceSearchFieldSelector(
+                      selected: _searchField,
+                      onChanged: (value) =>
+                          setState(() => _searchField = value),
+                    ),
+                    const SizedBox(height: 12),
+                    if (availableSectors.isNotEmpty) ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Todos los sectores'),
+                            selected: _selectedSectorFilter == null,
+                            onSelected: (_) {
+                              setState(() => _selectedSectorFilter = null);
+                            },
+                          ),
+                          ...availableSectors.map(
+                            (sector) => ChoiceChip(
+                              label: Text(sector),
+                              selected: _selectedSectorFilter == sector,
+                              onSelected: (_) {
+                                setState(() => _selectedSectorFilter = sector);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(color: Colors.red.shade800),
+                        ),
+                      ),
+                    Expanded(child: invoicesList),
                   ],
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: Colors.red.shade800),
-                  ),
-                ),
-              Expanded(
-                child: invoicesList,
-              ),
-            ],
                 ),
               ),
               if (_saving)
@@ -922,10 +930,7 @@ class _InvoiceSearchFieldSelector extends StatelessWidget {
 }
 
 class _BillableReadingCard extends StatelessWidget {
-  const _BillableReadingCard({
-    required this.reading,
-    required this.onGenerate,
-  });
+  const _BillableReadingCard({required this.reading, required this.onGenerate});
 
   final ConsumptionReading reading;
   final VoidCallback onGenerate;
@@ -933,7 +938,8 @@ class _BillableReadingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final previousReading = reading.lecturaAnterior ?? 0;
-    final consumption = reading.consumoCalculado ??
+    final consumption =
+        reading.consumoCalculado ??
         (reading.lecturaActual - previousReading).clamp(0, 1 << 31).toInt();
     return Container(
       padding: const EdgeInsets.all(20),
@@ -954,9 +960,13 @@ class _BillableReadingCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 6),
-              Text('Pendiente por facturar - Codigo ${reading.codigoUsuario} - Contador ${reading.codigoContador}'),
+              Text(
+                'Pendiente por facturar - Codigo ${reading.codigoUsuario} - Contador ${reading.codigoContador}',
+              ),
               const SizedBox(height: 6),
-              Text('Lectura anterior: $previousReading - Actual: ${reading.lecturaActual} - Consumo: $consumption m3'),
+              Text(
+                'Lectura anterior: $previousReading - Actual: ${reading.lecturaActual} - Consumo: $consumption m3',
+              ),
             ],
           );
           final action = ElevatedButton.icon(
@@ -1020,12 +1030,15 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-          final compact =
-              !constraints.hasBoundedWidth || constraints.maxWidth < 760;
+        final compact =
+            !constraints.hasBoundedWidth || constraints.maxWidth < 760;
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Facturacion', style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              'Facturacion',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 8),
             Text(
               'Selecciona un periodo y genera recibos para los consumos pendientes de facturar.',
@@ -1052,7 +1065,10 @@ class _Header extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Periodo', style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    'Periodo',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<BillingPeriod>(
                     isExpanded: true,
@@ -1183,17 +1199,38 @@ class _InvoicePreviewCard extends StatelessWidget {
             spacing: 18,
             runSpacing: 8,
             children: [
-              _LabelValue(label: 'Codigo usuario', value: invoice.codigoUsuario),
-          _LabelValue(label: 'Contador', value: invoice.codigoContador),
-          _LabelValue(label: 'Usuario', value: toDisplayUserName(invoice.nombreUsuario)),
-          _LabelValue(label: 'Periodo facturado', value: invoice.periodo),
-          _LabelValue(label: 'Generado', value: _formatDate(invoice.fechaGeneracion)),
-          _LabelValue(label: 'Vence', value: _formatDate(invoice.fechaVencimiento)),
-          _LabelValue(label: 'Consumo mes m3', value: '${invoice.consumoM3}'),
-          _LabelValue(label: 'Lectura anterior', value: '${invoice.lecturaAnterior ?? '-'}'),
-          _LabelValue(label: 'Lectura actual', value: '${invoice.lecturaActual}'),
-        ],
-      ),
+              _LabelValue(
+                label: 'Codigo usuario',
+                value: invoice.codigoUsuario,
+              ),
+              _LabelValue(label: 'Contador', value: invoice.codigoContador),
+              _LabelValue(
+                label: 'Usuario',
+                value: toDisplayUserName(invoice.nombreUsuario),
+              ),
+              _LabelValue(label: 'Periodo facturado', value: invoice.periodo),
+              _LabelValue(
+                label: 'Generado',
+                value: _formatDate(invoice.fechaGeneracion),
+              ),
+              _LabelValue(
+                label: 'Vence',
+                value: _formatDate(invoice.fechaVencimiento),
+              ),
+              _LabelValue(
+                label: 'Consumo mes m3',
+                value: '${invoice.consumoM3}',
+              ),
+              _LabelValue(
+                label: 'Lectura anterior',
+                value: '${invoice.lecturaAnterior ?? '-'}',
+              ),
+              _LabelValue(
+                label: 'Lectura actual',
+                value: '${invoice.lecturaActual}',
+              ),
+            ],
+          ),
           if (invoice.saldoAnterior != 0) ...[
             const SizedBox(height: 14),
             Text(
@@ -1209,7 +1246,9 @@ class _InvoicePreviewCard extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(child: Text(item.descripcion)),
-                  Text('${item.cantidad} x ${_formatCurrency(item.valorUnitario)}'),
+                  Text(
+                    '${item.cantidad} x ${_formatCurrency(item.valorUnitario)}',
+                  ),
                   const SizedBox(width: 14),
                   SizedBox(
                     width: 96,
@@ -1226,9 +1265,7 @@ class _InvoicePreviewCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'Estado: ${_receiptStatusDisplayText(invoice)}',
-                ),
+                child: Text('Estado: ${_receiptStatusDisplayText(invoice)}'),
               ),
               const SizedBox(width: 16),
               Text(
@@ -1300,7 +1337,10 @@ class _HeaderPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Periodo de trabajo', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Periodo de trabajo',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 10,
@@ -1400,10 +1440,7 @@ class _LabelValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 210,
-      child: Text('$label: $value'),
-    );
+    return SizedBox(width: 210, child: Text('$label: $value'));
   }
 }
 
@@ -1453,10 +1490,8 @@ class _ExportInvoicesDialogState extends State<_ExportInvoicesDialog> {
                   decoration: const InputDecoration(labelText: 'Sector'),
                   items: widget.sectors
                       .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item),
-                        ),
+                        (item) =>
+                            DropdownMenuItem(value: item, child: Text(item)),
                       )
                       .toList(),
                   onChanged: (value) => setState(() => _sector = value),
@@ -1493,11 +1528,8 @@ class _ExportInvoicesDialogState extends State<_ExportInvoicesDialog> {
                     onPressed: _requiresSector && _sector == null
                         ? null
                         : () => Navigator.of(context).pop(
-                              _ExportDialogResult(
-                                sector: _sector,
-                                mode: _mode,
-                              ),
-                            ),
+                            _ExportDialogResult(sector: _sector, mode: _mode),
+                          ),
                     child: const Text('Exportar'),
                   ),
                 ],
@@ -1511,20 +1543,14 @@ class _ExportInvoicesDialogState extends State<_ExportInvoicesDialog> {
 }
 
 class _ExportDialogResult {
-  const _ExportDialogResult({
-    this.sector,
-    required this.mode,
-  });
+  const _ExportDialogResult({this.sector, required this.mode});
 
   final String? sector;
   final _PdfExportMode mode;
 }
 
 class _SectorExportResult {
-  const _SectorExportResult({
-    required this.sector,
-    required this.mode,
-  });
+  const _SectorExportResult({required this.sector, required this.mode});
 
   final String sector;
   final _PdfExportMode mode;
@@ -1546,10 +1572,7 @@ class _SectorExportDialog extends StatelessWidget {
   }
 }
 
-enum _PdfExportMode {
-  combined,
-  individual,
-}
+enum _PdfExportMode { combined, individual }
 
 String _periodLabel(BillingPeriod period) {
   return '${period.clave} - ${toDisplayText(period.nombre)}${period.vigente ? ' - Vigente' : ''}';
@@ -1582,4 +1605,3 @@ String _formatCurrency(int value) {
   }
   return '\$${buffer.toString()}';
 }
-
