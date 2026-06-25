@@ -2,6 +2,23 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+int _toInt(dynamic value) {
+  return _toNullableInt(value) ?? 0;
+}
+
+int? _toNullableInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  if (value is String) {
+    return int.tryParse(value.trim());
+  }
+  return null;
+}
+
 class InvoiceLineItem {
   const InvoiceLineItem({
     required this.descripcion,
@@ -27,9 +44,9 @@ class InvoiceLineItem {
   factory InvoiceLineItem.fromMap(Map<String, dynamic> data) {
     return InvoiceLineItem(
       descripcion: data['descripcion'] as String? ?? '',
-      valorUnitario: data['valorUnitario'] as int? ?? 0,
-      cantidad: data['cantidad'] as int? ?? 0,
-      valorTotal: data['valorTotal'] as int? ?? 0,
+      valorUnitario: _toInt(data['valorUnitario']),
+      cantidad: _toInt(data['cantidad']),
+      valorTotal: _toInt(data['valorTotal']),
     );
   }
 }
@@ -210,14 +227,14 @@ class Invoice {
       codigoContador: data['codigoContador'] as String? ?? '',
       nombreUsuario: data['nombreUsuario'] as String? ?? '',
       sector: data['sector'] as String? ?? '',
-      lecturaAnterior: data['lecturaAnterior'] as int?,
-      lecturaActual: data['lecturaActual'] as int? ?? 0,
-      consumoM3: data['consumoM3'] as int? ?? 0,
+      lecturaAnterior: _toNullableInt(data['lecturaAnterior']),
+      lecturaActual: _toInt(data['lecturaActual']),
+      consumoM3: _toInt(data['consumoM3']),
       fechaGeneracion: _toDateTime(data['fechaGeneracion']) ?? DateTime.now(),
       fechaVencimiento: _toDateTime(data['fechaVencimiento']) ?? DateTime.now(),
-      cargoFijo: data['cargoFijo'] as int? ?? 0,
-      reconexion: data['reconexion'] as int? ?? 0,
-      saldoAnterior: data['saldoAnterior'] as int? ?? 0,
+      cargoFijo: _toInt(data['cargoFijo']),
+      reconexion: _toInt(data['reconexion']),
+      saldoAnterior: _toInt(data['saldoAnterior']),
       lineas: (data['lineas'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(InvoiceLineItem.fromMap)
@@ -232,10 +249,10 @@ class Invoice {
           data['estado'] as String? ??
           ((data['pagado'] as bool? ?? false) ? 'pagado' : 'facturado'),
       valorConfigId: data['valorConfigId'] as String? ?? '',
-      valorConfigVersion: data['valorConfigVersion'] as int? ?? 0,
-      total: data['total'] as int? ?? 0,
+      valorConfigVersion: _toInt(data['valorConfigVersion']),
+      total: _toInt(data['total']),
       pagado: data['pagado'] as bool? ?? false,
-      valorPagado: data['valorPagado'] as int?,
+      valorPagado: _toNullableInt(data['valorPagado']),
       fechaPago: _toDateTime(data['fechaPago']),
       medioPagoId: data['medioPagoId'] as String?,
       medioPagoDescripcion: data['medioPagoDescripcion'] as String?,
