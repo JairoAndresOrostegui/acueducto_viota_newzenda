@@ -31,7 +31,6 @@ class ConsumptionPaymentsPage extends StatefulWidget {
 }
 
 class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
-
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
   late final InvoiceFirestoreService _invoiceService =
@@ -86,10 +85,11 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
       }
       setState(() {
         _periods = periods;
-        _paymentMethods = paymentMethods
-            .where((item) => item.descripcion.trim().isNotEmpty)
-            .toList()
-          ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
+        _paymentMethods =
+            paymentMethods
+                .where((item) => item.descripcion.trim().isNotEmpty)
+                .toList()
+              ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
         _selectedPeriod = periods.contains(selected)
             ? selected
             : (periods.isEmpty ? null : periods.first);
@@ -250,7 +250,7 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       TextField(
                         controller: _searchController,
                         onChanged: (value) => setState(() => _query = value),
-                    decoration: const InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'Buscar en pagos',
                           prefixIcon: Icon(Icons.search_rounded),
                         ),
@@ -258,7 +258,8 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       const SizedBox(height: 8),
                       _PaymentSearchFieldSelector(
                         selected: _searchField,
-                        onChanged: (value) => setState(() => _searchField = value),
+                        onChanged: (value) =>
+                            setState(() => _searchField = value),
                       ),
                       const SizedBox(height: 16),
                       if (_error != null)
@@ -296,15 +297,16 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                     TextField(
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
-                    decoration: const InputDecoration(
-                          labelText: 'Buscar en pagos',
-                          prefixIcon: Icon(Icons.search_rounded),
-                        ),
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar en pagos',
+                        prefixIcon: Icon(Icons.search_rounded),
                       ),
+                    ),
                     const SizedBox(height: 8),
                     _PaymentSearchFieldSelector(
                       selected: _searchField,
-                      onChanged: (value) => setState(() => _searchField = value),
+                      onChanged: (value) =>
+                          setState(() => _searchField = value),
                     ),
                     const SizedBox(height: 16),
                     if (_error != null)
@@ -563,7 +565,9 @@ class _PaymentCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               if (invoice.saldoAnterior > 0)
-                Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
+                Text(
+                  'Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}',
+                ),
               if (invoice.saldoAnterior < 0)
                 Text(
                   'Saldo a favor aplicado: ${_formatCurrency(invoice.saldoAnterior.abs())}',
@@ -571,7 +575,7 @@ class _PaymentCard extends StatelessWidget {
               if (invoice.saldoAnterior != 0) const SizedBox(height: 6),
               Text(
                 invoice.estaSuspendido
-                    ? 'Estado: suspendido Â· Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'
+                    ? 'Estado: suspendido · Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'
                     : invoice.pagado
                     ? 'Estado: pagado · Valor pagado: ${_formatCurrency(invoice.valorPagado ?? invoice.totalAPagar)}'
                     : (invoice.valorPagado ?? 0) > 0

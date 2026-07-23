@@ -733,6 +733,10 @@ async function buildUserPayload(uid, data, previous = null, options = {}) {
     );
   }
 
+  if (payload.numeroDocumento !== 'na') {
+    await ensureUniqueDocumentNumber(uid, payload.numeroDocumento);
+  }
+
   if (payload.rol === 'cliente') {
     payload.tipoCliente = normalizeLowercase(data.tipoCliente, 'tipoCliente');
     if (!['socio', 'suscriptor'].includes(payload.tipoCliente)) {

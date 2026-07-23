@@ -102,10 +102,10 @@ service cloud.firestore {
               (isOperador() && isActiveClientDoc()) ||
               ((isContador() || isTesorero()) && isActiveClientDoc()));
 
-      allow create, update: if isAdmin() &&
-          request.resource.data.uid == userId;
-
-      allow delete: if isAdmin() && request.auth.uid != userId;
+      // User mutations must go through the validated Cloud Functions. The
+      // Admin SDK bypasses these rules, while direct clients cannot change
+      // roles, superAdmin, status, or skip the audit trail.
+      allow create, update, delete: if false;
     }
 
     match /tipos_documento/{docId} {

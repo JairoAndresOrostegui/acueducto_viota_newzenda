@@ -46,119 +46,123 @@ class _LoginFormState extends State<LoginForm> {
               child: Form(
                 key: _formKey,
                 child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(
-                    value: false,
-                    label: Text('Administrativo'),
-                    icon: Icon(Icons.admin_panel_settings_outlined),
-                  ),
-                  ButtonSegment(
-                    value: true,
-                    label: Text('Usuario'),
-                    icon: Icon(Icons.person_outline_rounded),
-                  ),
-                ],
-                selected: {_isClientLogin},
-                onSelectionChanged: widget.controller.isLoading
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _isClientLogin = value.first;
-                          _requiresProfileCompletion = false;
-                        });
-                        widget.controller.clearError();
-                      },
-              ),
-              const SizedBox(height: 18),
-              if (_isClientLogin) ...[
-                _clientCodeField(),
-                const SizedBox(height: 18),
-                _emailField(required: _requiresProfileCompletion),
-                if (_requiresProfileCompletion) ...[
-                  const SizedBox(height: 18),
-                  _documentNumberField(),
-                  const SizedBox(height: 18),
-                  _contactNumberField(),
-                ],
-              ] else ...[
-                _emailField(required: true),
-                const SizedBox(height: 18),
-                _passwordField(),
-              ],
-              const SizedBox(height: 14),
-              Center(
-                child: CheckboxListTile(
-                  value: widget.controller.rememberSession,
-                  onChanged: widget.controller.isLoading
-                      ? null
-                      : (value) {
-                          widget.controller.setRememberSession(value ?? false);
-                        },
-                  title: const Text(
-                    'Mantener sesión activa en este equipo',
-                    textAlign: TextAlign.center,
-                  ),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                ),
-              ),
-              if (widget.controller.errorMessage case final message?)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.error.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.error_outline_rounded,
-                          color: AppColors.error,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(
+                          value: false,
+                          label: Text('Administrativo'),
+                          icon: Icon(Icons.admin_panel_settings_outlined),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          message,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        ButtonSegment(
+                          value: true,
+                          label: Text('Usuario'),
+                          icon: Icon(Icons.person_outline_rounded),
                         ),
                       ],
+                      selected: {_isClientLogin},
+                      onSelectionChanged: widget.controller.isLoading
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _isClientLogin = value.first;
+                                _requiresProfileCompletion = false;
+                              });
+                              widget.controller.clearError();
+                            },
                     ),
-                  ),
-                ),
-              ElevatedButton(
-                onPressed: widget.controller.isLoading ? null : _submit,
-                child: widget.controller.isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: AppColors.textOnDark,
+                    const SizedBox(height: 18),
+                    if (_isClientLogin) ...[
+                      _clientCodeField(),
+                      const SizedBox(height: 18),
+                      _emailField(required: _requiresProfileCompletion),
+                      if (_requiresProfileCompletion) ...[
+                        const SizedBox(height: 18),
+                        _documentNumberField(),
+                        const SizedBox(height: 18),
+                        _contactNumberField(),
+                      ],
+                    ] else ...[
+                      _emailField(required: true),
+                      const SizedBox(height: 18),
+                      _passwordField(),
+                    ],
+                    const SizedBox(height: 14),
+                    Center(
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: CheckboxListTile(
+                          value: widget.controller.rememberSession,
+                          onChanged: widget.controller.isLoading
+                              ? null
+                              : (value) {
+                                  widget.controller.setRememberSession(
+                                    value ?? false,
+                                  );
+                                },
+                          title: const Text(
+                            'Mantener sesión activa en este equipo',
+                            textAlign: TextAlign.center,
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
                         ),
-                      )
-                    : const Text('Ingresar'),
-              ),
-            ],
-          ),
+                      ),
+                    ),
+                    if (widget.controller.errorMessage case final message?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.error.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                color: AppColors.error,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                message,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ElevatedButton(
+                      onPressed: widget.controller.isLoading ? null : _submit,
+                      child: widget.controller.isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: AppColors.textOnDark,
+                              ),
+                            )
+                          : const Text('Ingresar'),
+                    ),
+                  ],
+                ),
               ),
             ),
             if (widget.controller.isLoading)
               Positioned.fill(
                 child: Container(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surface
-                      .withValues(alpha: 0.72),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.72),
                   child: const Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -181,7 +185,9 @@ class _LoginFormState extends State<LoginForm> {
     return TextFormField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
-      textInputAction: _isClientLogin ? TextInputAction.done : TextInputAction.next,
+      textInputAction: _isClientLogin
+          ? TextInputAction.done
+          : TextInputAction.next,
       textAlign: TextAlign.center,
       onFieldSubmitted: _isClientLogin ? (_) => _submit() : null,
       decoration: InputDecoration(
@@ -334,21 +340,22 @@ class _LoginFormState extends State<LoginForm> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Bienvenido al sistema del acueducto.'),
-      ),
+      const SnackBar(content: Text('Bienvenido al sistema del acueducto.')),
     );
   }
 
   Future<bool> _submitClientLogin() async {
     final result = await widget.controller.loginWithClientCode(
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text,
+      email: _emailController.text.trim().isEmpty
+          ? null
+          : _emailController.text,
       clientCode: _clientCodeController.text,
       documentNumber: _requiresProfileCompletion
           ? _documentNumberController.text
           : null,
-      contactNumber:
-          _requiresProfileCompletion ? _contactNumberController.text : null,
+      contactNumber: _requiresProfileCompletion
+          ? _contactNumberController.text
+          : null,
     );
 
     if (!mounted) {
