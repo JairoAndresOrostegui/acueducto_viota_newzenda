@@ -155,6 +155,9 @@ Cada reporte tiene responsabilidad separada:
 - Al tercer periodo de mora, el recibo puede pasar a `suspendido`; los cobros siguen acumulando.
 - El estado `suspendido` se levanta pagando o desde la pantalla de suspensiones.
 - El cliente solo ve recibos asociados a sus codigos de usuario.
+- La creacion, edicion y eliminacion de usuarios se realiza exclusivamente
+  mediante Cloud Functions; las escrituras directas desde clientes estan
+  bloqueadas por las reglas de Firestore.
 - El contador y fiscal tienen acceso de solo lectura.
 - Los soportes de gastos deben ser PDF y se almacenan en `gastos_soportes/{periodoId}` dentro de Firebase Storage.
 - La eliminacion de usuario exige confirmacion escribiendo `ELIMINAR`.
@@ -207,6 +210,7 @@ En este repositorio se recomienda usar los scripts seguros cuando Flutter se que
 ```bash
 flutter pub get
 flutter analyze
+flutter test
 flutter build web
 firebase deploy --only firestore --project frontacueductonewzenda
 firebase deploy --only storage --project frontacueductonewzenda
@@ -219,6 +223,20 @@ Script de analisis seguro usado durante la entrega:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\flutter_analyze_safe.ps1 -Target . -SkipGlobalCleanup
 ```
+
+Validaciones del backend y de las reglas de seguridad:
+
+```bash
+cd functions
+npm ci
+npm run lint
+npm run test:rules
+```
+
+El repositorio incluye un flujo de integracion continua en
+`.github/workflows/quality.yml` que analiza, prueba y compila Flutter, valida
+Cloud Functions y ejecuta las pruebas de reglas contra el emulador de
+Firestore.
 
 ## Despliegue actual
 

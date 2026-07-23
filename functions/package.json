@@ -6,13 +6,21 @@
     "node": "22"
   },
   "scripts": {
-    "lint": "echo \"No lint configured\"",
+    "lint": "eslint .",
+    "test:rules": "firebase emulators:exec --config ../firebase.json --project demo-acueducto --only firestore \"node --test test/firestore.rules.test.js\"",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
   "dependencies": {
-    "firebase-admin": "^13.8.0",
+    "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.2.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "eslint": "^10.7.0",
+    "firebase-tools": "^15.24.0",
+    "globals": "^17.7.0"
   }
 }
