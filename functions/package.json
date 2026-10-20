@@ -7,7 +7,7 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "test:rules": "firebase emulators:exec --config ../firebase.json --project demo-acueducto --only firestore \"node --test test/firestore.rules.test.js\"",
+    "test:rules": "firebase emulators:exec --config ../firebase.json --project demo-acueducto --only firestore \"node --test --test-concurrency=1 test/*.test.js\"",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"

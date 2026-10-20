@@ -202,6 +202,26 @@ Cada reporte tiene responsabilidad separada:
 - `mergeClientUsersByDocument`
 - `normalizeImportedUserPlaceholders`
 - `importConsumptionReadings`
+- `previewInvoicePayment`
+- `applyInvoicePayment`
+- `saveAccountInvoice`
+
+### Pagos y regeneracion de recibos
+
+El formulario distingue entre un nuevo abono, la correccion del total pagado y
+la anulacion de abonos. Las correcciones y anulaciones exigen un motivo y se
+registran mediante movimientos de diferencia o reverso. Un posible pago
+repetido o un importe superior al pendiente presenta una alerta que permite
+continuar despues de confirmar.
+
+Las operaciones se validan y guardan mediante Cloud Functions, en una transaccion
+por contador. Los movimientos de pago se conservan al regenerar cargos y los
+saldos y estados de los recibos posteriores se recalculan automaticamente,
+incluidos los que estaban cubiertos por saldo a favor. Los reintentos de una
+misma solicitud conservan un identificador para evitar duplicar movimientos.
+
+El PDF muestra el estado actual, los abonos registrados y el saldo pendiente
+como total a pagar, tanto en el resumen como en el desprendible del acueducto.
 
 ## Comandos utiles
 

@@ -193,7 +193,7 @@ class _ReceiptPage extends pw.StatelessWidget {
           ? sum
           : sum + item.valorTotal;
     });
-    final totalToPay = invoice.totalAPagar;
+    final totalToPay = invoice.saldoPendiente;
 
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -237,13 +237,13 @@ class _ReceiptPage extends pw.StatelessWidget {
               ),
               _summaryRow('RECONEXIÓN', _formatCurrency(invoice.reconexion)),
               _summaryRow(
+                'ABONOS REGISTRADOS',
+                _formatCurrency(invoice.valorPagado ?? 0),
+              ),
+              _summaryRow(
                 'TOTAL A PAGAR',
                 _formatCurrency(totalToPay),
                 highlighted: true,
-              ),
-              _summaryRow(
-                'VALOR PAGADO',
-                invoice.pagado ? 'PAGADO' : '__________________',
               ),
             ],
           ),
@@ -295,8 +295,8 @@ class _ReceiptPage extends pw.StatelessWidget {
                     children: [
                       _footCell('USUARIO', invoice.nombreUsuario),
                       _footCell(
-                        'VALOR FACTURADO',
-                        _formatCurrency(invoice.total),
+                        'TOTAL A PAGAR',
+                        _formatCurrency(invoice.saldoPendiente),
                       ),
                     ],
                   ),
@@ -383,7 +383,7 @@ class _ReceiptPage extends pw.StatelessWidget {
   }
 
   pw.Widget _statusBox() {
-    final status = _statusPresentation(invoice.estadoPeriodoAnterior);
+    final status = _statusPresentation(invoice.receiptStatusAt(DateTime.now()));
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
       child: pw.Column(
@@ -591,15 +591,15 @@ class _ReceiptPage extends pw.StatelessWidget {
   _StatusPresentation _statusPresentation(String? value) {
     switch ((value ?? '').trim().toLowerCase()) {
       case 'suspendido':
-        // Cambio temporal solicitado: los recibos suspendidos se muestran como
-        // "En mora" solo en impresion. Para volver al texto original, cambiar
-        // esta etiqueta a "Suspendido"; no modificar el estado interno
-        // "suspendido" ni el caso "en_mora" de abajo.
-        return const _StatusPresentation('En mora', PdfColors.red800);
+        return const _StatusPresentation('Suspendido', PdfColors.red800);
       case 'en_mora':
         return const _StatusPresentation('En mora', PdfColors.orange800);
+      case 'pagado':
+        return const _StatusPresentation('Pagado', PdfColors.green700);
+      case 'abonado':
+        return const _StatusPresentation('Abonado', PdfColors.orange800);
       default:
-        return const _StatusPresentation('Al día', PdfColors.green700);
+        return const _StatusPresentation('Pendiente', PdfColors.orange800);
     }
   }
 

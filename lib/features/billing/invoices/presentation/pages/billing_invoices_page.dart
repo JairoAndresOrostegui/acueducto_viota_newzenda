@@ -871,7 +871,23 @@ class _BillingInvoicesPageState extends State<BillingInvoicesPage> {
                 Positioned.fill(
                   child: ColoredBox(
                     color: AppColors.textPrimary.withValues(alpha: 0.16),
-                    child: const Center(child: CircularProgressIndicator()),
+                    child: const Center(
+                      child: Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text(
+                                'Actualizando recibos y recalculando los saldos posteriores…',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
             ],

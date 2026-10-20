@@ -70,6 +70,49 @@ void main() {
     );
   });
 
+  test(
+    'a later settled receipt prevents showing an old carried debt again',
+    () {
+      final old = _invoice(total: 116000, periodo: '2026-06');
+      final latest = _invoice(
+        total: 27300,
+        periodo: '2026-07',
+        estado: 'pagado',
+      );
+      expect(Invoice.latestPayable([old, latest]), isNull);
+    },
+  );
+
+  test('receipt status uses the current payment, not the previous period', () {
+    final now = DateTime(2026, 7, 15);
+    expect(_invoice(total: 50000).receiptStatusAt(now), 'pendiente');
+    expect(
+      _invoice(total: 50000, valorPagado: 10000).receiptStatusAt(now),
+      'abonado',
+    );
+    expect(
+      _invoice(total: 50000, estado: 'pagado').receiptStatusAt(now),
+      'pagado',
+    );
+    expect(
+      _invoice(total: 50000, estado: 'suspendido').receiptStatusAt(now),
+      'suspendido',
+    );
+    expect(
+      _invoice(total: 50000).receiptStatusAt(DateTime(2026, 8, 1)),
+      'en_mora',
+    );
+  });
+
+  test('25A receipt shows only the remaining 27300 after the 116000 abono', () {
+    final invoice = _invoice(
+      total: 27300,
+      saldoAnterior: 116000,
+      valorPagado: 116000,
+    );
+    expect(invoice.saldoPendiente, 27300);
+  });
+
   test('builds the receipt PDF with the detachable period', () async {
     final bytes = await InvoicePrintingService().buildPdf(
       _invoice(total: 42_000, saldoAnterior: 8_000),
@@ -85,10 +128,11 @@ Invoice _invoice({
   int reconexion = 0,
   int? valorPagado,
   String estado = 'facturado',
+  String periodo = '2026-07',
 }) {
   return Invoice(
     id: 'invoice-id',
-    periodo: '2026-07',
+    periodo: periodo,
     codigoUsuario: '1001',
     codigoContador: 'M-1001',
     nombreUsuario: 'Cliente',
