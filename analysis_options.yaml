@@ -14,6 +14,7 @@ analyzer:
     - build/**
     - .dart_tool/**
     - .firebase/**
+    - functions/node_modules/**
     - firebase-debug.log
     - flutter_01.log
 

@@ -155,6 +155,9 @@ Cada reporte tiene responsabilidad separada:
 - Al tercer periodo de mora, el recibo puede pasar a `suspendido`; los cobros siguen acumulando.
 - El estado `suspendido` se levanta pagando o desde la pantalla de suspensiones.
 - El cliente solo ve recibos asociados a sus codigos de usuario.
+- La creacion, edicion y eliminacion de usuarios se realiza exclusivamente
+  mediante Cloud Functions; las escrituras directas desde clientes estan
+  bloqueadas por las reglas de Firestore.
 - El contador y fiscal tienen acceso de solo lectura.
 - Los soportes de gastos deben ser PDF y se almacenan en `gastos_soportes/{periodoId}` dentro de Firebase Storage.
 - La eliminacion de usuario exige confirmacion escribiendo `ELIMINAR`.
@@ -199,6 +202,26 @@ Cada reporte tiene responsabilidad separada:
 - `mergeClientUsersByDocument`
 - `normalizeImportedUserPlaceholders`
 - `importConsumptionReadings`
+- `previewInvoicePayment`
+- `applyInvoicePayment`
+- `saveAccountInvoice`
+
+### Pagos y regeneracion de recibos
+
+El formulario distingue entre un nuevo abono, la correccion del total pagado y
+la anulacion de abonos. Las correcciones y anulaciones exigen un motivo y se
+registran mediante movimientos de diferencia o reverso. Un posible pago
+repetido o un importe superior al pendiente presenta una alerta que permite
+continuar despues de confirmar.
+
+Las operaciones se validan y guardan mediante Cloud Functions, en una transaccion
+por contador. Los movimientos de pago se conservan al regenerar cargos y los
+saldos y estados de los recibos posteriores se recalculan automaticamente,
+incluidos los que estaban cubiertos por saldo a favor. Los reintentos de una
+misma solicitud conservan un identificador para evitar duplicar movimientos.
+
+El PDF muestra el estado actual, los abonos registrados y el saldo pendiente
+como total a pagar, tanto en el resumen como en el desprendible del acueducto.
 
 ## Comandos utiles
 
@@ -207,6 +230,7 @@ En este repositorio se recomienda usar los scripts seguros cuando Flutter se que
 ```bash
 flutter pub get
 flutter analyze
+flutter test
 flutter build web
 firebase deploy --only firestore --project frontacueductonewzenda
 firebase deploy --only storage --project frontacueductonewzenda
@@ -219,6 +243,20 @@ Script de analisis seguro usado durante la entrega:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\flutter_analyze_safe.ps1 -Target . -SkipGlobalCleanup
 ```
+
+Validaciones del backend y de las reglas de seguridad:
+
+```bash
+cd functions
+npm ci
+npm run lint
+npm run test:rules
+```
+
+El repositorio incluye un flujo de integracion continua en
+`.github/workflows/quality.yml` que analiza, prueba y compila Flutter, valida
+Cloud Functions y ejecuta las pruebas de reglas contra el emulador de
+Firestore.
 
 ## Despliegue actual
 

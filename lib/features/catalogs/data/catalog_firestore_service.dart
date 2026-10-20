@@ -5,10 +5,8 @@ import '../domain/catalog_item.dart';
 String normalizeCatalogValue(String value) => value.trim().toLowerCase();
 
 class CatalogFirestoreService {
-  CatalogFirestoreService(
-    this.collectionName, {
-    FirebaseFirestore? firestore,
-  }) : _firestore = firestore;
+  CatalogFirestoreService(this.collectionName, {FirebaseFirestore? firestore})
+    : _firestore = firestore;
 
   final String collectionName;
   final FirebaseFirestore? _firestore;
@@ -23,7 +21,9 @@ class CatalogFirestoreService {
         .orderBy('fechaCreacion')
         .limit(limit)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map(CatalogItem.fromFirestore).toList());
+        .map(
+          (snapshot) => snapshot.docs.map(CatalogItem.fromFirestore).toList(),
+        );
   }
 
   Future<List<CatalogItem>> fetchActiveItems({int limit = 100}) async {
@@ -54,16 +54,13 @@ class CatalogFirestoreService {
 }
 
 class DocumentTypeCatalogService extends CatalogFirestoreService {
-  DocumentTypeCatalogService({FirebaseFirestore? firestore})
-      : super('tipos_documento', firestore: firestore);
+  DocumentTypeCatalogService({super.firestore}) : super('tipos_documento');
 }
 
 class RoleCatalogService extends CatalogFirestoreService {
-  RoleCatalogService({FirebaseFirestore? firestore})
-      : super('roles', firestore: firestore);
+  RoleCatalogService({super.firestore}) : super('roles');
 }
 
 class SectorCatalogService extends CatalogFirestoreService {
-  SectorCatalogService({FirebaseFirestore? firestore})
-      : super('sectores', firestore: firestore);
+  SectorCatalogService({super.firestore}) : super('sectores');
 }

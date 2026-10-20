@@ -181,6 +181,26 @@ class Invoice {
 
   bool get estaSuspendido => estado.trim().toLowerCase() == 'suspendido';
 
+  String receiptStatusAt(DateTime now) {
+    if (estaPagado || totalAPagar - (valorPagado ?? 0) <= 0) return 'pagado';
+    if (estaSuspendido) return 'suspendido';
+    if (estado == 'en_mora' || fechaVencimiento.isBefore(now)) return 'en_mora';
+    if ((valorPagado ?? 0) > 0) return 'abonado';
+    return 'pendiente';
+  }
+
+  static Invoice? latestPayable(Iterable<Invoice> invoices) {
+    final ordered = invoices.toList()
+      ..sort((a, b) {
+        final period = b.periodo.compareTo(a.periodo);
+        return period != 0
+            ? period
+            : b.fechaGeneracion.compareTo(a.fechaGeneracion);
+      });
+    if (ordered.isEmpty || ordered.first.saldoPendiente <= 0) return null;
+    return ordered.first;
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'id': id,

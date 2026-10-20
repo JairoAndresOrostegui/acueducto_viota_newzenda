@@ -10,6 +10,7 @@ import '../../payment_methods/domain/payment_method.dart';
 import '../../periods/domain/billing_period.dart';
 import '../../values/domain/billing_value_config.dart';
 import '../domain/invoice.dart';
+import 'billing_account_functions_service.dart';
 
 class RegenerateInvoicesResult {
   const RegenerateInvoicesResult({
@@ -29,6 +30,7 @@ class InvoiceFirestoreService {
     BillingObservationFirestoreService? observationService,
     AccountMovementFirestoreService? accountMovementService,
     UserFirestoreService? userService,
+    BillingAccountFunctionsService? billingAccountService,
   }) : _firestore = firestore,
        _observationService =
            observationService ??
@@ -36,12 +38,15 @@ class InvoiceFirestoreService {
        _accountMovementService =
            accountMovementService ??
            AccountMovementFirestoreService(firestore: firestore),
-       _userService = userService ?? UserFirestoreService(firestore: firestore);
+       _userService = userService ?? UserFirestoreService(firestore: firestore),
+       _billingAccountService =
+           billingAccountService ?? BillingAccountFunctionsService();
 
   final FirebaseFirestore? _firestore;
   final BillingObservationFirestoreService _observationService;
   final AccountMovementFirestoreService _accountMovementService;
   final UserFirestoreService _userService;
+  final BillingAccountFunctionsService _billingAccountService;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -77,7 +82,7 @@ class InvoiceFirestoreService {
     final snapshot = await _db
         .collectionGroup('recibos')
         .where('codigoUsuario', isEqualTo: customerCode)
-        .where('pagado', isEqualTo: false)
+        .where('pagado', whereIn: [false, true])
         .get();
     final items =
         snapshot.docs
@@ -91,7 +96,7 @@ class InvoiceFirestoreService {
             }
             return b.fechaGeneracion.compareTo(a.fechaGeneracion);
           });
-    return items.isEmpty ? null : items.first;
+    return Invoice.latestPayable(items);
   }
 
   Future<Invoice?> fetchLatestPayableInvoiceForClientCodes(
@@ -202,7 +207,6 @@ class InvoiceFirestoreService {
           meterCodes: readings.map((item) => item.codigoContador),
         );
 
-    final batch = _db.batch();
     for (final reading in readings) {
       final previousInvoices =
           previousInvoicesByMeter[reading.codigoContador] ?? const <Invoice>[];
@@ -226,101 +230,20 @@ class InvoiceFirestoreService {
         ),
         actor: actor,
       );
-      batch.set(
-        _periodInvoices(period.id).doc(invoice.id),
-        invoice.toFirestore(),
-        SetOptions(merge: true),
-      );
-      _accountMovementService.setInvoiceCharge(
-        batch: batch,
-        invoice: invoice,
-        actor: actor,
-        createdAt: now,
-      );
-      batch.set(
-        _periodConsumptions(period.id).doc(reading.codigoContador),
-        reading
-            .copyWith(
-              facturado: true,
-              pagado: false,
-              reciboId: invoice.id,
-              estado: invoice.estado,
-            )
-            .toFirestore(),
-        SetOptions(merge: true),
-      );
+      await _billingAccountService.saveInvoice(invoice, regenerate: false);
     }
-    await batch.commit();
   }
 
-  Future<void> updatePaymentStatus({
-    required Invoice invoice,
-    required bool paid,
-    required AppUser actor,
-    int? paidAmount,
-    PaymentMethod? paymentMethod,
-    String? observations,
-  }) async {
-    _ensureAccountingPeriod(invoice.periodo);
-    final previousPaidAmount = invoice.valorPagado ?? 0;
-    final newPaidAmount = paid ? (paidAmount ?? invoice.totalAPagar) : 0;
-    final newStatus = _resolvePaymentStatus(
-      invoice: invoice,
-      paidAmount: newPaidAmount,
-    );
-    final paidAt = DateTime.now();
-    final updated = invoice.copyWith(
-      estado: newStatus,
-      pagado: newPaidAmount >= invoice.totalAPagar && invoice.totalAPagar > 0,
-      valorPagado: newPaidAmount,
-      fechaPago: newPaidAmount > 0 ? paidAt : null,
-      medioPagoId: paid ? paymentMethod?.id : null,
-      medioPagoDescripcion: paid ? paymentMethod?.descripcion : null,
-      observacionesPago: paid && (observations?.trim().isNotEmpty ?? false)
-          ? observations!.trim()
-          : null,
-    );
-
-    final batch = _db.batch();
-    _accountMovementService.setInvoiceCharge(
-      batch: batch,
-      invoice: invoice,
-      actor: actor,
-    );
-    _accountMovementService.addPaymentDelta(
-      batch: batch,
-      invoice: invoice,
-      deltaPaidAmount: newPaidAmount - previousPaidAmount,
-      actor: actor,
-      paymentMethod: paymentMethod,
-      observations: observations,
-      paidAt: paidAt,
-    );
-    batch.set(
-      _periodInvoices(invoice.periodo).doc(invoice.id),
-      updated.toFirestore(),
-      SetOptions(merge: true),
-    );
-    batch.set(
-      _periodConsumptions(invoice.periodo).doc(invoice.codigoContador),
-      {
-        'pagado': updated.pagado,
-        'estado': newStatus,
-        'reciboId': invoice.id,
-        'valorPagado': newPaidAmount,
-        'fechaPago': updated.fechaPago == null
-            ? null
-            : Timestamp.fromDate(updated.fechaPago!),
-        'medioPagoId': paid ? paymentMethod?.id : null,
-        'medioPagoDescripcion': paid ? paymentMethod?.descripcion : null,
-        'observacionesPago': paid && (observations?.trim().isNotEmpty ?? false)
-            ? observations!.trim()
-            : null,
-      },
-      SetOptions(merge: true),
-    );
-    await batch.commit();
+  Future<PaymentPreview> previewPayment(Map<String, dynamic> request) {
+    return _billingAccountService.previewPayment(request);
   }
+
+  Future<Map<String, dynamic>> applyPayment(Map<String, dynamic> request) {
+    return _billingAccountService.applyPayment(request);
+  }
+
+  String createPaymentRequestId() =>
+      _db.collection('operaciones_cuenta').doc().id;
 
   Future<void> suspendInvoice({
     required Invoice invoice,
@@ -339,19 +262,16 @@ class InvoiceFirestoreService {
       updated.toFirestore(),
       SetOptions(merge: true),
     );
-    batch.set(
-      _periodConsumptions(invoice.periodo).doc(invoice.codigoContador),
-      {
-        'estado': 'suspendido',
-        'reciboId': invoice.id,
-        'pagado': invoice.pagado,
-        'facturado': true,
-        'detalleEstado': 'Suspendido por ${actor.nombre}',
-        if ((observations?.trim().isNotEmpty ?? false))
-          'observacionesAdmin': observations!.trim(),
-      },
-      SetOptions(merge: true),
-    );
+    batch
+        .set(_periodConsumptions(invoice.periodo).doc(invoice.codigoContador), {
+          'estado': 'suspendido',
+          'reciboId': invoice.id,
+          'pagado': invoice.pagado,
+          'facturado': true,
+          'detalleEstado': 'Suspendido por ${actor.nombre}',
+          if ((observations?.trim().isNotEmpty ?? false))
+            'observacionesAdmin': observations!.trim(),
+        }, SetOptions(merge: true));
     await batch.commit();
   }
 
@@ -372,17 +292,14 @@ class InvoiceFirestoreService {
       updated.toFirestore(),
       SetOptions(merge: true),
     );
-    batch.set(
-      _periodConsumptions(invoice.periodo).doc(invoice.codigoContador),
-      {
-        'estado': restoredStatus,
-        'reciboId': invoice.id,
-        'pagado': invoice.pagado,
-        'facturado': true,
-        'detalleEstado': 'Suspension levantada por ${actor.nombre}',
-      },
-      SetOptions(merge: true),
-    );
+    batch
+        .set(_periodConsumptions(invoice.periodo).doc(invoice.codigoContador), {
+          'estado': restoredStatus,
+          'reciboId': invoice.id,
+          'pagado': invoice.pagado,
+          'facturado': true,
+          'detalleEstado': 'Suspension levantada por ${actor.nombre}',
+        }, SetOptions(merge: true));
     await batch.commit();
   }
 
@@ -427,7 +344,6 @@ class InvoiceFirestoreService {
 
     var regeneratedCount = 0;
     var skippedPaidCount = 0;
-    final batch = _db.batch();
 
     for (final existing in existingInvoices) {
       if (existing.pagado || existing.estado.trim().toLowerCase() == 'pagado') {
@@ -461,32 +377,15 @@ class InvoiceFirestoreService {
         actor: actor,
         existingInvoice: existing,
       );
-      batch.set(
-        _periodInvoices(period.id).doc(invoice.id),
-        invoice.toFirestore(),
-        SetOptions(merge: true),
+      final saved = await _billingAccountService.saveInvoice(
+        invoice,
+        regenerate: true,
       );
-      _accountMovementService.setInvoiceCharge(
-        batch: batch,
-        invoice: invoice,
-        actor: actor,
-        createdAt: now,
-      );
-      batch.set(
-        _periodConsumptions(period.id).doc(reading.codigoContador),
-        {
-          'estado': invoice.estado,
-          'reciboId': invoice.id,
-          'pagado': invoice.pagado,
-          'facturado': true,
-        },
-        SetOptions(merge: true),
-      );
-      regeneratedCount++;
-    }
-
-    if (regeneratedCount > 0) {
-      await batch.commit();
+      if (saved) {
+        regeneratedCount++;
+      } else {
+        skippedPaidCount++;
+      }
     }
 
     return RegenerateInvoicesResult(
@@ -557,29 +456,7 @@ class InvoiceFirestoreService {
       existingInvoice: existing,
     );
 
-    final batch = _db.batch();
-    batch.set(
-      _periodInvoices(period.id).doc(invoice.id),
-      invoice.toFirestore(),
-      SetOptions(merge: true),
-    );
-    _accountMovementService.setInvoiceCharge(
-      batch: batch,
-      invoice: invoice,
-      actor: actor,
-      createdAt: now,
-    );
-    batch.set(
-      _periodConsumptions(period.id).doc(invoice.codigoContador),
-      {
-        'estado': invoice.estado,
-        'reciboId': invoice.id,
-        'pagado': invoice.pagado,
-        'facturado': true,
-      },
-      SetOptions(merge: true),
-    );
-    await batch.commit();
+    await _billingAccountService.saveInvoice(invoice, regenerate: true);
   }
 
   Invoice _buildInvoice({
@@ -632,7 +509,10 @@ class InvoiceFirestoreService {
       previousInvoice: previousInvoice,
       accountBalance: accountBalance,
     );
-    final isCoveredByCredit = subtotal + previousBalance <= 0;
+    final previousPaid = existingInvoice?.valorPagado ?? 0;
+    final reconnection = existingInvoice?.reconexion ?? 0;
+    final isCoveredByCredit =
+        subtotal + reconnection + previousBalance - previousPaid <= 0;
 
     return Invoice(
       id: reading.codigoContador,
@@ -647,7 +527,7 @@ class InvoiceFirestoreService {
       fechaGeneracion: generatedAt,
       fechaVencimiento: dueDate,
       cargoFijo: values.cargoFijo,
-      reconexion: 0,
+      reconexion: reconnection,
       saldoAnterior: previousBalance,
       lineas: lineItems,
       mediosPagoTexto: paymentText,
@@ -659,7 +539,11 @@ class InvoiceFirestoreService {
       valorConfigVersion: values.version,
       total: subtotal,
       pagado: isCoveredByCredit,
-      valorPagado: 0,
+      valorPagado: previousPaid,
+      fechaPago: existingInvoice?.fechaPago,
+      medioPagoId: existingInvoice?.medioPagoId,
+      medioPagoDescripcion: existingInvoice?.medioPagoDescripcion,
+      observacionesPago: existingInvoice?.observacionesPago,
       actorUid: actor.uid,
       actorNombre: actor.nombre,
       observaciones: appliedObservations,
@@ -816,22 +700,6 @@ class InvoiceFirestoreService {
       return 0;
     }
     return previousInvoice.saldoPendiente;
-  }
-
-  String _resolvePaymentStatus({
-    required Invoice invoice,
-    required int paidAmount,
-  }) {
-    if (paidAmount >= invoice.totalAPagar && invoice.totalAPagar > 0) {
-      return 'pagado';
-    }
-    if (invoice.estaSuspendido) {
-      return 'suspendido';
-    }
-    if (paidAmount > 0) {
-      return 'en_mora';
-    }
-    return 'facturado';
   }
 
   Future<List<String>> _fetchPreviousBillablePeriodIds(

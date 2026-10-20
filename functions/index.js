@@ -14,6 +14,20 @@ const SECTOR_COLLECTION = 'sectores';
 const PERIOD_COLLECTION = 'periodos';
 const MIN_CONSUMPTION_HISTORY_PERIOD = '2025-12';
 const ACCOUNT_MOVEMENT_COLLECTION = 'cuentas_movimientos';
+const { createAccountService } = require('./billing/account_service');
+const billingAccount = createAccountService(db, admin);
+
+function billingCallable(handler) {
+  return onCall({ cors: true, invoker: 'public', timeoutSeconds: 180 }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
+    const actor = await getAdminProfile(request.auth.uid);
+    return handler(request.data || {}, actor);
+  });
+}
+
+exports.previewInvoicePayment = billingCallable((data) => billingAccount.previewPayment(data));
+exports.applyInvoicePayment = billingCallable((data, actor) => billingAccount.applyPayment(data, actor));
+exports.saveAccountInvoice = billingCallable((data, actor) => billingAccount.saveInvoice(data, actor));
 
 async function getAdminProfile(uid) {
   const snapshot = await db.collection(USER_COLLECTION).doc(uid).get();
@@ -731,6 +745,10 @@ async function buildUserPayload(uid, data, previous = null, options = {}) {
       'invalid-argument',
       'El estado del usuario debe ser activo o inactivo.',
     );
+  }
+
+  if (payload.numeroDocumento !== 'na') {
+    await ensureUniqueDocumentNumber(uid, payload.numeroDocumento);
   }
 
   if (payload.rol === 'cliente') {

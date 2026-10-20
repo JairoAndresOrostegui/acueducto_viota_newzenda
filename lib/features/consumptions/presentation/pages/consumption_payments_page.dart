@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import '../../../billing/invoices/data/billing_account_functions_service.dart';
+import '../../../billing/invoices/presentation/widgets/invoice_payment_dialog.dart';
 
 import '../../../../core/presentation/text_formatters.dart';
 import '../../../../theme/app_colors.dart';
@@ -31,7 +32,6 @@ class ConsumptionPaymentsPage extends StatefulWidget {
 }
 
 class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
-
   late final BillingPeriodFirestoreService _periodService =
       widget.periodService ?? BillingPeriodFirestoreService();
   late final InvoiceFirestoreService _invoiceService =
@@ -41,6 +41,7 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
 
   bool _loading = true;
   bool _saving = false;
+  String _savingMessage = 'Actualizando pagos y recibos posteriores…';
   String? _error;
   String _query = '';
   String _searchField = 'nombre';
@@ -86,10 +87,11 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
       }
       setState(() {
         _periods = periods;
-        _paymentMethods = paymentMethods
-            .where((item) => item.descripcion.trim().isNotEmpty)
-            .toList()
-          ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
+        _paymentMethods =
+            paymentMethods
+                .where((item) => item.descripcion.trim().isNotEmpty)
+                .toList()
+              ..sort((a, b) => a.descripcion.compareTo(b.descripcion));
         _selectedPeriod = periods.contains(selected)
             ? selected
             : (periods.isEmpty ? null : periods.first);
@@ -137,54 +139,143 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
   }
 
   Future<void> _openPaymentDialog(Invoice invoice) async {
-    final result = await showDialog<_PaymentResult>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) =>
-          _PaymentDialog(invoice: invoice, paymentMethods: _paymentMethods),
-    );
-    if (result == null) {
-      return;
-    }
-
-    setState(() => _saving = true);
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _savingMessage = 'Consultando los abonos actuales…';
+    });
     try {
-      await _invoiceService.updatePaymentStatus(
-        invoice: invoice,
-        paid: result.paid,
-        actor: widget.currentUser,
-        paidAmount: result.paidAmount,
-        paymentMethod: result.paymentMethod,
-        observations: result.observations,
-      );
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.paid
-                ? 'Pago registrado con valor guardado en la base de datos.'
-                : 'Recibo marcado como no pagado.',
+      final base = {'period': invoice.periodo, 'meter': invoice.codigoContador};
+      final current = await _invoiceService.previewPayment({
+        ...base,
+        'mode': 'add',
+        'amount': 1,
+      });
+      if (!mounted) return;
+      setState(() => _saving = false);
+      final result = await showDialog<InvoicePaymentResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => InvoicePaymentDialog(
+          invoice: invoice.copyWith(
+            valorPagado: current.currentPaid,
+            saldoAnterior: current.priorBalance,
+            estado: current.currentStatus,
+            pagado: current.settled,
           ),
+          paymentMethods: _paymentMethods,
         ),
       );
-      final period = _selectedPeriod;
-      if (period != null) {
-        await _loadInvoices(period);
+      if (result == null || !mounted) return;
+      setState(() {
+        _saving = true;
+        _savingMessage = 'Validando el pago y calculando los saldos…';
+      });
+      final request = <String, dynamic>{
+        ...base,
+        'mode': result.mode,
+        'amount': result.amount,
+        'paymentMethodId': result.paymentMethod?.id,
+        'observations': result.observations,
+        'requestId': _invoiceService.createPaymentRequestId(),
+      };
+      var proposal = await _invoiceService.previewPayment(request);
+      var changed = false;
+      while (mounted) {
+        if (proposal.warnings.isNotEmpty || changed) {
+          final confirmed = await _confirmPayment(proposal, changed: changed);
+          if (confirmed != true || !mounted) return;
+        }
+        setState(
+          () => _savingMessage =
+              'Guardando el pago y actualizando los recibos posteriores…',
+        );
+        final response = await _invoiceService.applyPayment({
+          ...request,
+          'token': proposal.token,
+          'confirmWarnings': true,
+        });
+        if (response['requiresConfirmation'] == true) {
+          proposal = PaymentPreview.fromMap(
+            Map<String, dynamic>.from(response['preview'] as Map),
+          );
+          changed = true;
+          continue;
+        }
+        if (!mounted) return;
+        setState(() => _savingMessage = 'Cargando la cuenta actualizada…');
+        if (_selectedPeriod != null) await _loadInvoices(_selectedPeriod!);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Operación guardada. Recibos actualizados: ${response['updatedInvoices']}.',
+            ),
+          ),
+        );
+        break;
       }
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No fue posible actualizar el pago: $error')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
+      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<bool?> _confirmPayment(
+    PaymentPreview preview, {
+    required bool changed,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Revisar operación de pago'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (changed)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'La cuenta cambió mientras se revisaba. Confirma los valores actualizados.',
+                  ),
+                ),
+              for (final warning in preview.warnings)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(warning),
+                ),
+              Text(
+                'Pagado actualmente: ${_formatCurrency(preview.currentPaid)}',
+              ),
+              Text(
+                'Total pagado después de guardar: ${_formatCurrency(preview.nextPaid)}',
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Se actualizarán los periodos: ${preview.affectedPeriods.join(', ')}.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirmar y continuar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -250,7 +341,7 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       TextField(
                         controller: _searchController,
                         onChanged: (value) => setState(() => _query = value),
-                    decoration: const InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'Buscar en pagos',
                           prefixIcon: Icon(Icons.search_rounded),
                         ),
@@ -258,7 +349,8 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                       const SizedBox(height: 8),
                       _PaymentSearchFieldSelector(
                         selected: _searchField,
-                        onChanged: (value) => setState(() => _searchField = value),
+                        onChanged: (value) =>
+                            setState(() => _searchField = value),
                       ),
                       const SizedBox(height: 16),
                       if (_error != null)
@@ -296,15 +388,16 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
                     TextField(
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
-                    decoration: const InputDecoration(
-                          labelText: 'Buscar en pagos',
-                          prefixIcon: Icon(Icons.search_rounded),
-                        ),
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar en pagos',
+                        prefixIcon: Icon(Icons.search_rounded),
                       ),
+                    ),
                     const SizedBox(height: 8),
                     _PaymentSearchFieldSelector(
                       selected: _searchField,
-                      onChanged: (value) => setState(() => _searchField = value),
+                      onChanged: (value) =>
+                          setState(() => _searchField = value),
                     ),
                     const SizedBox(height: 16),
                     if (_error != null)
@@ -323,7 +416,21 @@ class _ConsumptionPaymentsPageState extends State<ConsumptionPaymentsPage> {
           Positioned.fill(
             child: ColoredBox(
               color: AppColors.textPrimary.withValues(alpha: 0.16),
-              child: const Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text(_savingMessage, textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
       ],
@@ -563,7 +670,9 @@ class _PaymentCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               if (invoice.saldoAnterior > 0)
-                Text('Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}'),
+                Text(
+                  'Saldo anterior: ${_formatCurrency(invoice.saldoAnterior)}',
+                ),
               if (invoice.saldoAnterior < 0)
                 Text(
                   'Saldo a favor aplicado: ${_formatCurrency(invoice.saldoAnterior.abs())}',
@@ -571,7 +680,7 @@ class _PaymentCard extends StatelessWidget {
               if (invoice.saldoAnterior != 0) const SizedBox(height: 6),
               Text(
                 invoice.estaSuspendido
-                    ? 'Estado: suspendido Â· Total a pagar: ${_formatCurrency(invoice.totalAPagar)}'
+                    ? 'Estado: suspendido · Abonado: ${_formatCurrency(invoice.valorPagado ?? 0)} · Pendiente: ${_formatCurrency(invoice.saldoPendiente)}'
                     : invoice.pagado
                     ? 'Estado: pagado · Valor pagado: ${_formatCurrency(invoice.valorPagado ?? invoice.totalAPagar)}'
                     : (invoice.valorPagado ?? 0) > 0
@@ -584,7 +693,7 @@ class _PaymentCard extends StatelessWidget {
               if (!invoice.pagado) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Valor a registrar: ${_formatCurrency(invoice.totalAPagar)}',
+                  'Saldo pendiente: ${_formatCurrency(invoice.saldoPendiente)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -600,7 +709,7 @@ class _PaymentCard extends StatelessWidget {
             icon: Icon(
               invoice.pagado ? Icons.undo_rounded : Icons.payments_rounded,
             ),
-            label: Text(invoice.pagado ? 'Cambiar estado' : 'Registrar pago'),
+            label: const Text('Registrar o corregir pago'),
           );
 
           if (compact) {
@@ -620,213 +729,6 @@ class _PaymentCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PaymentDialog extends StatefulWidget {
-  const _PaymentDialog({required this.invoice, required this.paymentMethods});
-
-  final Invoice invoice;
-  final List<PaymentMethod> paymentMethods;
-
-  @override
-  State<_PaymentDialog> createState() => _PaymentDialogState();
-}
-
-class _PaymentDialogState extends State<_PaymentDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late bool _paid = widget.invoice.pagado;
-  PaymentMethod? _paymentMethod;
-  final TextEditingController _valueController = TextEditingController();
-  final TextEditingController _observationsController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _valueController.text =
-        '${widget.invoice.valorPagado ?? widget.invoice.totalAPagar}';
-    _observationsController.text = widget.invoice.observacionesPago ?? '';
-    if ((widget.invoice.medioPagoId ?? '').isNotEmpty) {
-      final matches = widget.paymentMethods.where(
-        (item) => item.id == widget.invoice.medioPagoId,
-      );
-      if (matches.isNotEmpty) {
-        _paymentMethod = matches.first;
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _valueController.dispose();
-    _observationsController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Actualizar pago',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${toDisplayUserName(widget.invoice.nombreUsuario)} · ${_formatCurrency(widget.invoice.totalAPagar)}',
-                ),
-                const SizedBox(height: 16),
-                SwitchListTile(
-                  value: _paid,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Usuario pago este recibo'),
-                  onChanged: (value) => setState(() => _paid = value),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Valor del recibo',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatCurrency(widget.invoice.totalAPagar),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _paid
-                            ? 'El valor pagado afectara la cuenta del usuario. Si supera el recibo queda como saldo a favor; si es menor queda saldo en mora.'
-                            : 'Activa el pago para registrar el valor recibido.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                if (_paid) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _valueController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Valor pagado',
-                      helperText:
-                          'Este valor queda guardado en la base de datos.',
-                    ),
-                    validator: (value) {
-                      if (!_paid) {
-                        return null;
-                      }
-                      final amount = int.tryParse((value ?? '').trim());
-                      if (amount == null || amount <= 0) {
-                        return 'Ingresa un valor pagado valido.';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<PaymentMethod>(
-                    isExpanded: true,
-                    initialValue: _paymentMethod,
-                    decoration: const InputDecoration(
-                      labelText: 'Medio de pago (opcional)',
-                    ),
-                    items: widget.paymentMethods
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item,
-                            child: Text(
-                              item.descripcion,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setState(() => _paymentMethod = value),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _observationsController,
-                    minLines: 2,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Observaciones (opcional)',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancelar'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (_paid && !_formKey.currentState!.validate()) {
-                          return;
-                        }
-                        Navigator.of(context).pop(
-                          _PaymentResult(
-                            paid: _paid,
-                            paidAmount: _paid
-                                ? int.tryParse(_valueController.text.trim())
-                                : null,
-                            paymentMethod: _paid ? _paymentMethod : null,
-                            observations: _paid
-                                ? _observationsController.text.trim()
-                                : null,
-                          ),
-                        );
-                      },
-                      child: const Text('Guardar'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentResult {
-  const _PaymentResult({
-    required this.paid,
-    this.paidAmount,
-    this.paymentMethod,
-    this.observations,
-  });
-
-  final bool paid;
-  final int? paidAmount;
-  final PaymentMethod? paymentMethod;
-  final String? observations;
 }
 
 String _periodLabel(BillingPeriod period) {
